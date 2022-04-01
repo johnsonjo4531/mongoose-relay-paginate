@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkmongoose_relay_paginate=self.webpackChunkmongoose_relay_paginate||[]).push([[633],{7812:function(a){a.exports=JSON.parse('{"allTagsPath":"/mongoose-relay-paginate/blog/tags","name":"why","count":1,"permalink":"/mongoose-relay-paginate/blog/tags/why"}')}}]);
