@@ -12,8 +12,8 @@ const config = {
   baseUrl: '/mongoose-relay-paginate/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
-  organizationName: 'facebook', // Usually your GitHub org/user name.
-  projectName: 'docusaurus', // Usually your repo name.
+  organizationName: 'johnsonjo4531', // Usually your GitHub org/user name.
+  projectName: 'mongoose-relay-paginate', // Usually your repo name.
 
   presets: [
     [
