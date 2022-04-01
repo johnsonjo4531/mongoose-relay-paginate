@@ -1,0 +1,22 @@
+version: "3.8"
+
+volumes:
+  mongo: null
+
+services:
+  compose-mongo:
+    command:
+      - mongod
+    container_name: compose-mongo
+    image: mongo:latest
+    ports:
+      - 32782:27017/tcp
+    stdin_open: true
+    tty: true
+    volumes:
+      - mongo:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:27017" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
