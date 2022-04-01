@@ -8,7 +8,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const config = {
   title: 'Mongoose Relay Paginate',
   tagline: 'Paginate your Mongoose queries Relay style',
-  url: 'https://johnsonjo4531.github.io/mongoose-relay-paginate/',
+  url: 'https://johnsonjo4531.github.io/',
   baseUrl: '/mongoose-relay-paginate/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
