@@ -2,7 +2,7 @@
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
     <channel>
         <title>Mongoose Relay Paginate Blog</title>
-        <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/mongoose-relay-paginate/blog</link>
+        <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/blog</link>
         <description>Mongoose Relay Paginate Blog</description>
         <lastBuildDate>Wed, 02 Mar 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
@@ -10,7 +10,7 @@
         <language>en</language>
         <item>
             <title><![CDATA[What is cursoring and pagination?]]></title>
-            <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/mongoose-relay-paginate/blog/what-is-cursoring</link>
+            <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/blog/what-is-cursoring</link>
             <guid>what-is-cursoring</guid>
             <pubDate>Wed, 02 Mar 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[A cursor helps a server to find an item in a database.]]></description>
@@ -26,7 +26,7 @@ a specific book. This information you have about the book can help you locate it
         </item>
         <item>
             <title><![CDATA[Why would I want cursor based paging?]]></title>
-            <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/mongoose-relay-paginate/blog/why-cursor-based-paging</link>
+            <link>https://johnsonjo4531.github.io/mongoose-relay-paginate/blog/why-cursor-based-paging</link>
             <guid>why-cursor-based-paging</guid>
             <pubDate>Wed, 02 Mar 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[TLDR; When should I choose cursoring?]]></description>
