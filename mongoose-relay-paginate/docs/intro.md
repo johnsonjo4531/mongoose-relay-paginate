@@ -6,7 +6,7 @@ sidebar_position: 1
 
 ## What
 
-This library is meant to allow cursor based pagination between the client and the server. You might want to read why cursor based pagination over
+This library is meant to allow cursor based pagination between the client and the server. You might want to read [why you might want cursor based pagination](/blog/why-cursor-based-paging)
 
 ## Why
 

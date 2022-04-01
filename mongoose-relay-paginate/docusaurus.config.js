@@ -11,6 +11,7 @@ const config = {
   url: 'https://johnsonjo4531.github.io/',
   baseUrl: '/mongoose-relay-paginate/',
   onBrokenLinks: 'throw',
+  favicon: "img/logo.png",
   onBrokenMarkdownLinks: 'warn',
   organizationName: 'johnsonjo4531', // Usually your GitHub org/user name.
   projectName: 'mongoose-relay-paginate', // Usually your repo name.
@@ -23,13 +24,13 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
-          editUrl: 'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+          editUrl: 'https://github.com/johnsonjo4531/mongoose-relay-paginate/tree/main/packages/create-docusaurus/templates/shared/',
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+            'https://github.com/johnsonjo4531/mongoose-relay-paginate/tree/main/packages/create-docusaurus/templates/shared/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
@@ -43,6 +44,12 @@ const config = {
     ({
       navbar: {
         title: 'Mongoose Relay Paginate',
+        logo: {
+          src: "img/logo.png",
+          alt: "mongoose relay paginate logo",
+          height: 35,
+          width: 35,
+        },
         items: [
           {
             type: 'doc',
@@ -73,18 +80,18 @@ const config = {
           {
             title: 'Community',
             items: [
-              {
-                label: 'Stack Overflow',
-                href: 'https://stackoverflow.com/questions/tagged/docusaurus',
-              },
+              // {
+              //   label: 'Stack Overflow',
+              //   href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+              // },
               {
                 label: 'Discord',
-                href: 'https://discordapp.com/invite/docusaurus',
+                href: 'https://discord.gg/kHzXnAsSEv',
               },
-              {
-                label: 'Twitter',
-                href: 'https://twitter.com/docusaurus',
-              },
+              // {
+              //   label: 'Twitter',
+              //   href: 'https://twitter.com/',
+              // },
             ],
           },
           {

@@ -63,6 +63,7 @@ async function run(): Promise<void> {
 	await doc2.save();
 	await doc3.save();
 
+
   const result = await UserModel.find()
 			.sort({ name: -1 })
 			.relayPaginate({
@@ -76,6 +77,5 @@ async function run(): Promise<void> {
 
   console.log(result.nodes); // Will be any array of just Phill's object
 }
-
 ```
 
