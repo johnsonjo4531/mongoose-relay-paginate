@@ -8,13 +8,14 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const config = {
   title: 'Mongoose Relay Paginate',
   tagline: 'Paginate your Mongoose queries Relay style',
-  url: 'https://johnsonjo4531.github.io/',
+  url: 'https://johnsonjo4531.github.io',
   baseUrl: '/mongoose-relay-paginate/',
   onBrokenLinks: 'throw',
   favicon: "img/logo.png",
   onBrokenMarkdownLinks: 'warn',
   organizationName: 'johnsonjo4531', // Usually your GitHub org/user name.
   projectName: 'mongoose-relay-paginate', // Usually your repo name.
+  trailingSlash: false,
 
   presets: [
     [
@@ -87,11 +88,7 @@ const config = {
               {
                 label: 'Discord',
                 href: 'https://discord.gg/kHzXnAsSEv',
-              },
-              // {
-              //   label: 'Twitter',
-              //   href: 'https://twitter.com/',
-              // },
+              }
             ],
           },
           {
