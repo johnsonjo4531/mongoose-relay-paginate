@@ -3,6 +3,7 @@
   "version": "1.0.1",
   "description": "Uses mongoose to create a relay compatible cursor based pagination.",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "author": "johnsonjo4531",
   "license": "MIT",
   "private": false,
