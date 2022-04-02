@@ -1,6 +1,6 @@
 {
   "name": "mongoose-relay-paginate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Uses mongoose to create a relay compatible cursor based pagination.",
   "main": "lib/index.js",
   "author": "johnsonjo4531",
@@ -10,7 +10,16 @@
   "repository": {
     "url": "https://github.com/johnsonjo4531/mongoose-relay-paginate"
   },
-  "keywords": ["mongoose", "relay", "relay-connections", "connection", "connections", "graphql", "mongodb", "connection-type"],
+  "keywords": [
+    "mongoose",
+    "relay",
+    "relay-connections",
+    "connection",
+    "connections",
+    "graphql",
+    "mongodb",
+    "connection-type"
+  ],
   "devDependencies": {
     "@types/jest": "^27.4.1",
     "del-cli": "^4.0.1",
