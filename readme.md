@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./mongoose-relay-paginate/static/img/logo.png" />
+</p>
+
 ## Docs
 
 View the [docs](https://johnsonjo4531.github.io/mongoose-relay-paginate/)
