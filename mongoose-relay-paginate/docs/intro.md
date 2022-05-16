@@ -59,3 +59,20 @@ const result = await UserModel.find()
     first: 1,
   });
 ```
+
+Or use an aggregate query off of your model:
+
+```ts
+const result = await UserModel
+  // sorting by id from largest-->smallest using mongoose's default sort.
+  .aggregateRelayPaginate(
+    [{$sort: {_id: 1}}],
+    {
+    toCursor(doc) {
+      return {
+        _id: doc._id,
+      };
+    },
+    first: 1,
+  });
+```

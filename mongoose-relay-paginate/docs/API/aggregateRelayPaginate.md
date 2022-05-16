@@ -1,4 +1,6 @@
-# relayPaginate()
+# aggregateRelayPaginate()
+
+### released in v2.0.0
 
 You'll need to import this package at the top of your entry file:
 
@@ -6,24 +8,22 @@ You'll need to import this package at the top of your entry file:
 import "mongoose-relay-paginate";
 ```
 
-Then you can use `.relayPaginate()` off of any mongoose query.
+Then you can use `.aggregateRelayPaginate()` off of any mongoose Model.
 
 ```ts
-const result = await UserModel.find()
-  // This is just the default mongoose sort
-  .sort({ _id: -1 })
-  // We can use the relayPaginate from this library off of any Query.
-  .relayPaginate({
+const result = await UserModel.aggregateRelayPaginate(
+  [{ $sort: { _id: -1 } }],
+  {
     toCursor(doc) {
-      return {
-        _id: doc._id,
-      };
+      return { _id: doc._id };
     },
-    first: 1,
-  });
+    last: 1,
+    before: result.pageInfo.endCursor,
+  }
+);
 ```
 
-`relayPaginate` takes in only one argument and that is its options  argument.
+`aggregateRelayPaginate` takes in two arguments the first is its mongoose aggregation pipeline argument and the second is its relayPaginate options argument.
 
 The only necessary part of relayPaginate option is the toCursor method you pass in. Abstractly `toCursor` is a function that takes in a document node and returns a cursor. The cursor defines a way that the specific item in a collection should be found. Say for example you have three user's with names: Bill, Jill, and Phill, which could be created like so.
 
@@ -53,10 +53,11 @@ await doc3.save();
 The `toCursor` here would select the user's name as the possible cursors. This means the before and after options, if provided, also have to fit this shape in order to return the proper output.
 
 ```ts
-const result = await UserModel.find()
-    // We sort by names from a-z
-    .sort({ name: 1 })
-    .relayPaginate({
+const result = await UserModel.aggregateRelayPaginate(
+    [
+      { $sort: { name: 1 } }
+    ],
+    {
       // we allow the cursor to be the user's name
       toCursor(doc) {
         return {
@@ -73,4 +74,4 @@ const result = await UserModel.find()
 console.log(result.nodes); // Will be an array of Jill and then Phill's object
 ```
 
-Generally you would want the cursor (represented by the return of your `toCursor`, and the before and after options) to match whatever you are sorting by.
+Generally you would want the cursor (represented by the return of your `toCursor`, and the before and after options) to match whatever you are sorting by a good default if you don't know what you are sorting by is to use the _id field as your cursor as it is the default sort field in mongodb.

@@ -45,15 +45,34 @@ Now the relayPaginate should be available on your mongoose queries.
 ```ts
 
 const result = await UserModel.find()
-  // sorting by name from z-->a using mongoose's default sort.
-  .sort({ name: -1 })
+  // sorting by id from largest (most recent)--> to smallest (most early) using mongoose's default sort.
+  .sort({ _id: -1 })
   // This library's `relayPaginate` can be used off of any mongoose query.
   .relayPaginate({
     toCursor(doc) {
       return {
-        name: doc.name,
+        _id: doc._id,
       };
     },
     first: 1,
   });
 ```
+
+Or use an aggregate query off of your model:
+
+```ts
+const result = await UserModel
+  // sorting by id from largest-->smallest using mongoose's default sort.
+  .aggregateRelayPaginate(
+    [{$sort: {_id: 1}}],
+    {
+    toCursor(doc) {
+      return {
+        _id: doc._id,
+      };
+    },
+    first: 1,
+  });
+```
+
+For more details view the [docs](https://johnsonjo4531.github.io/mongoose-relay-paginate/).
