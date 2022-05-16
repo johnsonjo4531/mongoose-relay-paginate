@@ -16,5 +16,5 @@
 		"declarationDir": "lib"
 	},
 	"include": ["src/**/*.ts"],
-	"exclude": ["node_modules", "lib"]
+	"exclude": ["node_modules", "lib", "mongoose-relay-paginate"]
 }
