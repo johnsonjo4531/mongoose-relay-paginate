@@ -709,7 +709,12 @@ declare module "mongoose" {
       this: Model<T>,
       aggregate: PipelineStage[],
       paginateInfo: Partial<MongooseRelayPaginateInfoOnModel<T>>
-    ): Promise<RelayResult<T[]>>;
+    ): {
+      toAggregate: <D>() => Aggregate<
+        unknown extends D ? [RelayResult<T[]>] : D
+      >;
+      then: Aggregate<RelayResult<T[]>>["then"];
+    };
   }
 }
 

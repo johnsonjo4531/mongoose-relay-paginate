@@ -380,62 +380,35 @@ describe("relayPaginate", () => {
     ).toMatchObject([{ name: "Jill" }]);
   });
 
-  it("should allow you to aggregate afterwards", async () => {
+  it("should allow simple aggregate afterwards", async () => {
     // sorted as [Phill, Jill, Bill]
-    // last is [Bill]
+    const [{ count }] = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
+      }
+    )
+      .toAggregate<[{ count: number }]>()
+      .count("count")
+      .then();
+
+    expect(count).toBe(1);
+  });
+
+  it("should allow slightly more complex aggregate afterwards", async () => {
+    // sorted as [Phill, Jill, Bill]
     const result = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: -1 } }],
+      [{ $sort: { name: 1 } }],
       {
         cursorKeys: ["name"],
-        last: 1,
       }
-    );
+    )
+      .toAggregate<[{ count: number }]>()
+      .unwind("$nodes")
+      .count("count");
 
-    // first 2 before Bill is [Phill, Jill]
-    const result2 = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: -1 } }],
-      {
-        cursorKeys: ["name"],
-        first: 2,
-        before: result.pageInfo.endCursor,
-      }
-    );
+    console.log(result);
 
-    // first 1 before Bill is [Phill]
-    const result3 = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: -1 } }],
-      {
-        cursorKeys: ["name"],
-        first: 1,
-        before: result.pageInfo.endCursor,
-      }
-    );
-
-    // last 1 before Bill is [Jill]
-    const result4 = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: -1 } }],
-      {
-        cursorKeys: ["name"],
-        last: 1,
-        before: result.pageInfo.endCursor,
-      }
-    );
-
-    console.log({
-      result1: alterNodeOnResult(result, ({ name }) => ({ name })).nodes,
-      result2: alterNodeOnResult(result2, ({ name }) => ({ name })).nodes,
-    });
-
-    expect(
-      alterNodeOnResult(result2, ({ name }) => ({ name })).nodes
-    ).toMatchObject([{ name: "Phill" }, { name: "Jill" }]);
-
-    expect(
-      alterNodeOnResult(result3, ({ name }) => ({ name })).nodes
-    ).toMatchObject([{ name: "Phill" }]);
-
-    expect(
-      alterNodeOnResult(result4, ({ name }) => ({ name })).nodes
-    ).toMatchObject([{ name: "Jill" }]);
+    expect(result?.[0]?.count).toBe(3);
   });
 });
