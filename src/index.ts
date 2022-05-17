@@ -28,11 +28,19 @@ class AggregateOrQueryCommandReplayer<T> {
     | { type: "sort"; args: Parameters<DefaultRelayQuery<T>["sort"]> }
     | { type: "limit"; args: Parameters<DefaultRelayQuery<T>["limit"]> }
     | { type: "find"; args: Parameters<DefaultRelayQuery<T>["find"]> }
+    | { type: "aggregate"; args: Parameters<Model<T>["aggregate"]> }
   )[] = [];
 
   sort(...args: Parameters<DefaultRelayQuery<T>["sort"]>) {
     this.commands.push({
       type: "sort",
+      args,
+    });
+  }
+
+  aggregate(...args: Parameters<Model<T>["aggregate"]>) {
+    this.commands.push({
+      type: "aggregate",
       args,
     });
   }
@@ -51,33 +59,72 @@ class AggregateOrQueryCommandReplayer<T> {
     });
   }
 
+  toLimitlessAggregate(
+    model: Model<T>,
+    regularAggregate: PipelineStage[],
+    additionalAggregates: PipelineStage[] = []
+  ): Aggregate<T[]> {
+    const stages: PipelineStage[] = this.commands
+      .filter(
+        (x): x is Exclude<typeof x, { type: "limit" }> => x.type !== "limit"
+      )
+      .flatMap((x): PipelineStage | PipelineStage[] =>
+        x.type === "find"
+          ? {
+              $match: x.args[0],
+            }
+          : x.type === "aggregate"
+          ? x.args[0]
+          : {
+              $sort: x.args[0],
+            }
+      );
+    return model.aggregate<T>([
+      ...regularAggregate,
+      ...stages,
+      ...additionalAggregates,
+    ]);
+  }
+
   toAggregate(
     model: Model<T>,
     regularAggregate: PipelineStage[],
     additionalAggregates: PipelineStage[] = []
   ): Aggregate<T[]> {
+    const stages: PipelineStage[] = this.commands.flatMap(
+      (x): PipelineStage | PipelineStage[] =>
+        x.type === "find"
+          ? {
+              $match: x.args[0],
+            }
+          : x.type === "aggregate"
+          ? x.args[0]
+          : x.type === "limit"
+          ? { $limit: x.args[0] }
+          : {
+              $sort: x.args[0],
+            }
+    );
     return model.aggregate<T>([
       ...regularAggregate,
-      ...this.commands.map(
-        (x): PipelineStage =>
-          x.type === "find"
-            ? {
-                $match: x.args[0],
-              }
-            : x.type === "limit"
-            ? { $limit: x.args[0] }
-            : {
-                $sort: x.args[0],
-              }
-      ),
+      ...stages,
       ...additionalAggregates,
     ]);
   }
 
+  currentCommands() {
+    return this.commands;
+  }
+
   toQuery(query: DefaultRelayQuery<T>): DefaultRelayQuery<T> {
-    return this.commands.reduce((query, { type, args }) => {
-      return (query[type] as CallableFunction)(...args);
-    }, query);
+    return this.commands
+      .filter(
+        (x): x is Exclude<typeof x, { type: "aggregate" }> =>
+          x.type !== "aggregate"
+      )
+      .reduce((query, { type, args }) => {
+        return (query[type] as CallableFunction)(...args);
+      }, query);
   }
 }
 type DefaultInnerRelayQuery<T = unknown> = AggregateOrQueryCommandReplayer<T>;
@@ -117,11 +164,7 @@ type DefaultInnerRelayQuery<T = unknown> = AggregateOrQueryCommandReplayer<T>;
  * }        -> some tranform to a cursor  -> {name: "bob"}
  * ```
  *
- * an example of how one would make this transform in particular the way this library does is through the toCursor function:
- *
- * ```js
- *
- * ```
+ * an example of how one would make this transform in particular the way this library does it through its cursorKeys option:
  *
  * @public
  */
@@ -336,18 +379,13 @@ type MongooseRelayDocument<Q extends DefaultRelayQuery> = Document<
 > &
   QueryRawDocType<Q>;
 
-/** A helper generic type which when given a {@link DefaultRelayQuery} constructs its corresponding toCursor type. */
-type MongooseRelayConnectionToCursor<Q extends DefaultRelayQuery> = (
-  document: MongooseRelayDocument<Q>
-) => Partial<MongooseRelayDocument<Q>>;
-
-/** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} construct its corresponding toCursor type. */
+/** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
 type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
   MongooseRelayPaginateInfoOnModel<MongooseRelayDocument<Q>>;
 
-/** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding toCursor type. */
+/** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
 type MongooseRelayPaginateInfoOnModel<D> = {
-  toCursor: (document: D) => Partial<D>;
+  cursorKeys: readonly (keyof D)[];
 } & PagingInfo;
 
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
@@ -367,7 +405,7 @@ type MongooseRelayPaginateInfoOnModel<D> = {
  */
 export function relayPaginate<Q extends DefaultRelayQuery>(
   query: Q,
-  { toCursor, ...pagingInfo }: MongooseRelayPaginateInfo<Q>
+  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfo<Q>
 ): MongooseQuery<
   Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
   QueryDocType<Q>,
@@ -389,7 +427,7 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
 
       const anyLimit = pagingInfo.last ?? pagingInfo.first ?? DEFAULT_LIMIT;
       return relayResultFromNodes(
-        toCursor,
+        cursorKeys,
         {
           count,
           hasNextPage:
@@ -428,53 +466,125 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
  * @param paginationInfo the information to help with the paging
  * @returns
  */
-export async function aggregateRelayPaginate<T>(
+export function aggregateRelayPaginate<T>(
   model: Model<T>,
   aggregate: PipelineStage[],
-  { toCursor, ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
-): Promise<RelayResult<T[]>> {
+  { cursorKeys, ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
+): {
+  toAggregate: () => Aggregate<[RelayResult<T[]>]>;
+  then: Aggregate<RelayResult<T[]>>["then"];
+} {
   const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
-  const originalSort: QueryOptions["sort"] = (
-    aggregate.reverse().find((x) => !!(x as { $sort?: unknown })["$sort"]) as {
-      $sort?: unknown;
-    }
-  )?.["$sort"] ?? {
+  const originalSort: PipelineStage.Sort["$sort"] = aggregate
+    .reverse()
+    .find((x): x is PipelineStage.Sort => !!(x as any)?.["$sort"])?.[
+    "$sort"
+  ] ?? {
     _id: 1,
   };
   edgesToReturn(pseudoQuery, pagingInfo, {
     originalSort,
   });
-  pseudoQuery.sort(
-    Object.fromEntries(
-      Object.entries(originalSort).map(([key, value]) => [
-        key,
-        typeof value === "number" ? value : null,
-      ])
-    )
-  );
-  const nodes = await pseudoQuery.toAggregate(model, aggregate);
-  const { count } = (await pseudoQuery.toAggregate(model, aggregate, [
-    { $count: "count" },
-  ])) as unknown as { count: number };
-
-  const anyLimit = pagingInfo.last ?? pagingInfo.first ?? DEFAULT_LIMIT;
-  return relayResultFromNodes(
-    toCursor as unknown as MongooseRelayConnectionToCursor<
-      DefaultRelayQuery<unknown>
-    >,
-    {
-      count,
-      hasNextPage:
-        (!!pagingInfo.before && count > anyLimit) ||
-        (!!pagingInfo.after && count > anyLimit) ||
-        count >= anyLimit,
-      hasPreviousPage:
-        (!!pagingInfo.before && count > anyLimit) ||
-        (!!pagingInfo.after && count > anyLimit) ||
-        count >= anyLimit,
+  const nodes: Aggregate<[RelayResult<T[]>]> = pseudoQuery.toLimitlessAggregate(
+    model,
+    aggregate
+  ) as unknown as Aggregate<[RelayResult<T[]>]>;
+  nodes.facet({
+    count: [{ $count: "count" }],
+    nodes: [
+      ...pseudoQuery.commands
+        .filter((x) => x.type === "limit")
+        .flatMap((x) => ({ $limit: x.args[0] })),
+      {
+        $sort: originalSort,
+      },
+    ],
+    ends: [
+      {
+        $sort: originalSort,
+      },
+      {
+        $group: {
+          _id: null,
+          first: { $first: "$$ROOT" },
+          last: { $last: "$$ROOT" },
+        },
+      },
+    ],
+  });
+  nodes.unwind("$count");
+  nodes.unwind("$ends");
+  nodes.replaceRoot({
+    nodes: "$nodes",
+    edges: {
+      $map: {
+        input: "$nodes",
+        as: "node",
+        in: {
+          node: "$$node",
+          cursor: "$$node",
+        },
+      },
     },
-    nodes as unknown as MongooseRelayDocument<DefaultRelayQuery<unknown>>[]
-  ) as unknown as RelayResult<T[]>;
+    pageInfo: {
+      count: "$count.count",
+      hasNextPage: {
+        $cond: [
+          {
+            $in: ["$ends.last._id", "$nodes._id"],
+          },
+          false,
+          true,
+        ],
+      },
+      hasPreviousPage: {
+        $cond: [
+          {
+            $in: ["$ends.first._id", "$nodes._id"],
+          },
+          false,
+          true,
+        ],
+      },
+      startCursor: { $first: "$nodes" },
+      endCursor: { $last: "$nodes" },
+    },
+  });
+  const cursorProjection = cursorKeys.reduce(
+    (cursorProjection, key) => ({ ...cursorProjection, [key]: 1 }),
+    {}
+  );
+  nodes.project({
+    nodes: 1,
+    edges: {
+      node: 1,
+      cursor: cursorProjection,
+    },
+    pageInfo: {
+      count: 1,
+      hasNextPage: 1,
+      hasPreviousPage: 1,
+      startCursor: cursorProjection,
+      endCursor: cursorProjection,
+    },
+  });
+  return {
+    toAggregate() {
+      return nodes;
+    },
+    then(resolve: () => any, reject: () => any) {
+      return nodes.then((x) => x[0]).then(resolve, reject);
+    },
+  };
+}
+
+export function toCursorFromKeys<
+  Result extends MongooseRelayDocument<DefaultRelayQuery>
+>(keys: MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"], doc: Result) {
+  return keys.reduce(
+    (obj, key) => ({ ...obj, [key]: doc[key] }),
+    {} as Partial<Result>
+  );
 }
 
 /** Creates a typed relay connection. This is what relay uses for it's cursor-based pagination algorithm.
@@ -482,7 +592,7 @@ export async function aggregateRelayPaginate<T>(
  * and finally some metadata about paging which is called the `pagingInfo`.
  *
  *
- * @param toCursor The way to turn a node into a cursor. For more info on cursors see {@link PagingCursor}
+ * @param cursorKeys The way to turn a node into a cursor. Given certain props it will create a partial document node known as the cursor of the original document node with only those keys that are listed. For more info on cursors see {@link PagingCursor}
  * @param pagingInfo the metadata about paging information (such as cursors, number of documents returned, etc.)
  * used by the client to gain some insight into the query and to more easily re-query and fetch the next
  * and previous page.
@@ -493,7 +603,7 @@ export async function aggregateRelayPaginate<T>(
 export function relayResultFromNodes<
   Result extends MongooseRelayDocument<DefaultRelayQuery>
 >(
-  toCursor: MongooseRelayPaginateInfoOnModel<Result>["toCursor"],
+  cursorKeys: MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"],
   {
     count,
     hasNextPage,
@@ -507,7 +617,7 @@ export function relayResultFromNodes<
   return {
     edges: nodes.map((node) => ({
       node: node,
-      cursor: toCursor(node),
+      cursor: toCursorFromKeys(cursorKeys, node),
     })),
     nodes,
     pageInfo: {
@@ -515,9 +625,9 @@ export function relayResultFromNodes<
       hasNextPage,
       hasPreviousPage,
       endCursor: nodes[nodes.length - 1]
-        ? toCursor(nodes[nodes.length - 1])
+        ? toCursorFromKeys(cursorKeys, nodes[nodes.length - 1])
         : null,
-      startCursor: nodes[0] ? toCursor(nodes[0]) : null,
+      startCursor: nodes[0] ? toCursorFromKeys(cursorKeys, nodes[0]) : null,
     },
   };
 }
@@ -565,7 +675,7 @@ declare module "mongoose" {
      */
     relayPaginate<Q extends DefaultRelayQuery>(
       this: Q,
-      { toCursor, ...pagingInfo }: MongooseRelayPaginateInfo<Q>
+      paginateInfo: Partial<MongooseRelayPaginateInfo<Q>>
     ): MongooseQuery<
       RelayResult<MongooseRelayDocument<Q>[]>,
       QueryDocType<Q>,
@@ -598,7 +708,7 @@ declare module "mongoose" {
     aggregateRelayPaginate<T>(
       this: Model<T>,
       aggregate: PipelineStage[],
-      { toCursor, ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
+      paginateInfo: Partial<MongooseRelayPaginateInfoOnModel<T>>
     ): Promise<RelayResult<T[]>>;
   }
 }

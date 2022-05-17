@@ -67,11 +67,7 @@ async function run(): Promise<void> {
   const result = await UserModel.find()
 			.sort({ name: -1 })
 			.relayPaginate({
-				toCursor(doc) {
-					return {
-						name: doc.name,
-					};
-				},
+				cursorKeys: ["name"],
 				first: 1,
 			});
 

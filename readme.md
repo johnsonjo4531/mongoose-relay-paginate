@@ -53,11 +53,7 @@ const result = await UserModel.find()
   .sort({ _id: -1 })
   // This library's `relayPaginate` can be used off of any mongoose query.
   .relayPaginate({
-    toCursor(doc) {
-      return {
-        _id: doc._id,
-      };
-    },
+    cursorKeys: ["_id"],
     first: 1,
   });
 ```
@@ -70,11 +66,8 @@ const result = await UserModel
   .aggregateRelayPaginate(
     [{$sort: {_id: 1}}],
     {
-    toCursor(doc) {
-      return {
-        _id: doc._id,
-      };
-    },
+
+    cursorKeys: ["_id"],
     first: 1,
   });
 ```

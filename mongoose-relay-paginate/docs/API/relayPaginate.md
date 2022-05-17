@@ -14,18 +14,14 @@ const result = await UserModel.find()
   .sort({ _id: -1 })
   // We can use the relayPaginate from this library off of any Query.
   .relayPaginate({
-    toCursor(doc) {
-      return {
-        _id: doc._id,
-      };
-    },
+    cursorKeys: ["_id"],
     first: 1,
   });
 ```
 
 `relayPaginate` takes in only one argument and that is its options  argument.
 
-The only necessary part of relayPaginate option is the toCursor method you pass in. Abstractly `toCursor` is a function that takes in a document node and returns a cursor. The cursor defines a way that the specific item in a collection should be found. Say for example you have three user's with names: Bill, Jill, and Phill, which could be created like so.
+The only necessary part of relayPaginate option is the cursorKeys property you pass in. Abstractly `cursorKeys` is an array which defines what properties on the cursor for the specific query. The cursor defines a way that the specific item in a collection should be found. Say for example you have three user's with names: Bill, Jill, and Phill, which could be created like so.
 
 ```ts
 const doc = new UserModel({
@@ -50,7 +46,7 @@ await doc2.save();
 await doc3.save();
 ```
 
-The `toCursor` here would select the user's name as the possible cursors. This means the before and after options, if provided, also have to fit this shape in order to return the proper output.
+The `cursorKeys` here below select the user's name as the cursor. This means the before and after options, if provided, also have to fit this shape in order to return the proper output.
 
 ```ts
 const result = await UserModel.find()
@@ -58,11 +54,7 @@ const result = await UserModel.find()
     .sort({ name: 1 })
     .relayPaginate({
       // we allow the cursor to be the user's name
-      toCursor(doc) {
-        return {
-          name: doc.name,
-        };
-      },
+      cursorKeys: ["name"],
       // we get the first 2 items only
       first: 2,
       // We start getting results only after we have found bill's record
@@ -73,4 +65,4 @@ const result = await UserModel.find()
 console.log(result.nodes); // Will be an array of Jill and then Phill's object
 ```
 
-Generally you would want the cursor (represented by the return of your `toCursor`, and the before and after options) to match whatever you are sorting by.
+Generally you would want the cursor (represented by the `cursorKeys` prop, and the before and after options) to match whatever you are sorting by.

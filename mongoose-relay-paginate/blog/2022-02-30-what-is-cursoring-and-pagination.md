@@ -37,14 +37,10 @@ DB Object -> some transform to a cursor -> Cursor
 }        -> some tranform to a cursor  -> {name: "bob"}
 ```
 
-an example of how one would make this transform in particular the way this library does is through the toCursor function:
+an example of how one would make this transform in particular the way this library does is through the cursorKeys option:
 
 ```js
 UserMode.find().relayPaginate({
-  toCursor (doc) {
-    return {
-      name: doc.name
-    }
-  }
+  cursorKeys: ["name"]
 })
 ```

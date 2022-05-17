@@ -71,9 +71,7 @@ describe("relayPaginate", () => {
 
   it("should do at least do the query", async () => {
     const result = await relayPaginate(UserModel.find(), {
-      toCursor(doc) {
-        return { myId: doc.myId };
-      },
+      cursorKeys: ["myId"],
     });
     const newNodes = alterNodeOnResult(result, ({ myId }) => ({
       myId,
@@ -83,9 +81,7 @@ describe("relayPaginate", () => {
 
   it("should use an after cursor properly", async () => {
     const result = await relayPaginate(UserModel.find().sort({ myId: "asc" }), {
-      toCursor(doc) {
-        return { myId: doc.myId };
-      },
+      cursorKeys: ["myId"],
       after: { myId: 1 },
     });
 
@@ -96,18 +92,14 @@ describe("relayPaginate", () => {
 
   it("should work with first, last, and before", async () => {
     const result = await relayPaginate(UserModel.find().sort({ myId: "asc" }), {
-      toCursor(doc) {
-        return { myId: doc.myId };
-      },
+      cursorKeys: ["myId"],
       after: { myId: 1 },
       first: 1,
     });
     const result2 = await relayPaginate(
       UserModel.find().sort({ myId: "asc" }),
       {
-        toCursor(doc) {
-          return { myId: doc.myId };
-        },
+        cursorKeys: ["myId"],
         before: { myId: 3 },
         last: 1,
       }
@@ -115,9 +107,7 @@ describe("relayPaginate", () => {
     const result3 = await relayPaginate(
       UserModel.find().sort({ myId: "asc" }),
       {
-        toCursor(doc) {
-          return { myId: doc.myId };
-        },
+        cursorKeys: ["myId"],
         before: { myId: 3 },
         first: 1,
       }
@@ -137,9 +127,7 @@ describe("relayPaginate", () => {
     const firstUser = await UserModel.findOne({ myId: 1 });
     if (!firstUser) throw new Error("No user unexpected test crash.");
     const result = await relayPaginate(UserModel.find().sort({ _id: "asc" }), {
-      toCursor(doc) {
-        return { _id: doc._id };
-      },
+      cursorKeys: ["_id"],
       after: { _id: firstUser._id },
       first: 2,
     });
@@ -150,15 +138,11 @@ describe("relayPaginate", () => {
 
   it("should sort correctly", async () => {
     const result = await relayPaginate(UserModel.find().sort({ name: -1 }), {
-      toCursor(doc) {
-        return { name: doc.name };
-      },
+      cursorKeys: ["name"],
       first: 1,
     });
     const result2 = await relayPaginate(UserModel.find().sort({ name: -1 }), {
-      toCursor(doc) {
-        return { name: doc.name };
-      },
+      cursorKeys: ["name"],
       last: 1,
     });
     expect(
@@ -172,9 +156,7 @@ describe("relayPaginate", () => {
 
   it("should make proper cursors", async () => {
     const result = await relayPaginate(UserModel.find().sort({ name: -1 }), {
-      toCursor(doc) {
-        return { name: doc.name };
-      },
+      cursorKeys: ["name"],
       first: 1,
     });
 
@@ -188,16 +170,12 @@ describe("relayPaginate", () => {
 
   it("should paginate with a previous cursor from query", async () => {
     const result = await relayPaginate(UserModel.find().sort({ name: -1 }), {
-      toCursor(doc) {
-        return { name: doc.name };
-      },
+      cursorKeys: ["name"],
       first: 1,
     });
 
     const result2 = await relayPaginate(UserModel.find().sort({ name: -1 }), {
-      toCursor(doc) {
-        return { name: doc.name };
-      },
+      cursorKeys: ["name"],
       first: 1,
       after: result.pageInfo.endCursor,
     });
@@ -211,20 +189,14 @@ describe("relayPaginate", () => {
     const result = await UserModel.find()
       .sort({ name: -1 })
       .relayPaginate({
-        toCursor(doc) {
-          return {
-            name: doc.name,
-          };
-        },
+        cursorKeys: ["name"],
         first: 1,
       });
 
     const result2 = await UserModel.find()
       .sort({ name: -1 })
       .relayPaginate({
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
         after: result.pageInfo.endCursor,
       });
@@ -240,26 +212,23 @@ describe("relayPaginate", () => {
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { _id: 1 } }],
       {
-        toCursor(doc) {
-          return { _id: doc._id };
-        },
+        cursorKeys: ["_id"],
         after: { _id: firstUser._id },
         first: 2,
       }
     );
+    console.log({ result });
     expect(
       alterNodeOnResult(result, ({ myId }) => ({ myId })).nodes
     ).toMatchObject([{ myId: 2 }, { myId: 3 }]);
   });
 
-  it("should should aggregate with an after cursor and first", async () => {
+  it("should aggregate with an after cursor and first", async () => {
     // [Phill]
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
       }
     );
@@ -268,9 +237,7 @@ describe("relayPaginate", () => {
     const result2 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
         after: result.pageInfo.endCursor,
       }
@@ -281,14 +248,12 @@ describe("relayPaginate", () => {
     ).toMatchObject([{ name: "Jill" }]);
   });
 
-  it("should should aggregate with an after and last", async () => {
+  it("should aggregate with an after and last", async () => {
     // [Phill, Jill, Bill]
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
       }
     );
@@ -297,9 +262,7 @@ describe("relayPaginate", () => {
     const result2 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         last: 1,
         after: result.pageInfo.endCursor,
       }
@@ -315,14 +278,12 @@ describe("relayPaginate", () => {
     ).toMatchObject([{ name: "Bill" }]);
   });
 
-  it("should should aggregate with an after and first", async () => {
+  it("should aggregate with an after and first", async () => {
     // [Phill, Jill, Bill]
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
       }
     );
@@ -331,9 +292,7 @@ describe("relayPaginate", () => {
     const result2 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 2,
         after: result.pageInfo.endCursor,
       }
@@ -349,15 +308,26 @@ describe("relayPaginate", () => {
     ).toMatchObject([{ name: "Jill" }, { name: "Bill" }]);
   });
 
-  it("should should aggregate with an before, first, and last", async () => {
+  it("should count documents", async () => {
+    // [Phill, Jill, Bill]
+    const result = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
+        first: 1,
+      }
+    );
+
+    expect(result.pageInfo.count).toBe(3);
+  });
+
+  it("should aggregate with an before, first, and last", async () => {
     // sorted as [Phill, Jill, Bill]
     // last is [Bill]
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         last: 1,
       }
     );
@@ -366,9 +336,7 @@ describe("relayPaginate", () => {
     const result2 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 2,
         before: result.pageInfo.endCursor,
       }
@@ -378,9 +346,7 @@ describe("relayPaginate", () => {
     const result3 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
         first: 1,
         before: result.pageInfo.endCursor,
       }
@@ -390,9 +356,66 @@ describe("relayPaginate", () => {
     const result4 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: -1 } }],
       {
-        toCursor(doc) {
-          return { name: doc.name };
-        },
+        cursorKeys: ["name"],
+        last: 1,
+        before: result.pageInfo.endCursor,
+      }
+    );
+
+    console.log({
+      result1: alterNodeOnResult(result, ({ name }) => ({ name })).nodes,
+      result2: alterNodeOnResult(result2, ({ name }) => ({ name })).nodes,
+    });
+
+    expect(
+      alterNodeOnResult(result2, ({ name }) => ({ name })).nodes
+    ).toMatchObject([{ name: "Phill" }, { name: "Jill" }]);
+
+    expect(
+      alterNodeOnResult(result3, ({ name }) => ({ name })).nodes
+    ).toMatchObject([{ name: "Phill" }]);
+
+    expect(
+      alterNodeOnResult(result4, ({ name }) => ({ name })).nodes
+    ).toMatchObject([{ name: "Jill" }]);
+  });
+
+  it("should allow you to aggregate afterwards", async () => {
+    // sorted as [Phill, Jill, Bill]
+    // last is [Bill]
+    const result = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
+        last: 1,
+      }
+    );
+
+    // first 2 before Bill is [Phill, Jill]
+    const result2 = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
+        first: 2,
+        before: result.pageInfo.endCursor,
+      }
+    );
+
+    // first 1 before Bill is [Phill]
+    const result3 = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
+        first: 1,
+        before: result.pageInfo.endCursor,
+      }
+    );
+
+    // last 1 before Bill is [Jill]
+    const result4 = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: -1 } }],
+      {
+        cursorKeys: ["name"],
         last: 1,
         before: result.pageInfo.endCursor,
       }
