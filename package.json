@@ -1,6 +1,6 @@
 {
   "name": "mongoose-relay-paginate",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Uses mongoose to create a relay compatible cursor based pagination.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -45,7 +45,8 @@
     "tsc": "tsc -p ./tsconfig.json",
     "format": "prettier --write \"src/**/*.ts\"",
     "clean": "del ./lib",
-    "lint": "eslint -c ./.eslintrc.json ./src/index.ts"
+    "lint": "eslint -c ./.eslintrc.json ./src/index.ts",
+    "prepublish": "yarn build"
   },
   "dependencies": {}
 }
