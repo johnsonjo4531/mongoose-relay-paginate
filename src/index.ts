@@ -469,7 +469,7 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
 export function aggregateRelayPaginate<T>(
   model: Model<T>,
   aggregate: PipelineStage[],
-  { cursorKeys, ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
+  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
 ): {
   toAggregate: () => Aggregate<[RelayResult<T[]>]>;
   then: Aggregate<RelayResult<T[]>>["then"];
