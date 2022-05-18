@@ -411,4 +411,54 @@ describe("relayPaginate", () => {
 
     expect(result?.[0]?.count).toBe(3);
   });
+
+  it("should allow getting pageInfo", async () => {
+    const result2 = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {
+        cursorKeys: ["name"],
+      }
+    );
+
+    const result = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {
+        cursorKeys: ["name"],
+      }
+    )
+      .toAggregate<[{ count: number }]>()
+      .unwind("$nodes")
+      .count("count");
+
+    console.log(result);
+
+    expect(result?.[0]?.count).toBe(3);
+    expect(result2.pageInfo?.count).toBe(3);
+  });
+
+  it("should allow getting nodes on aggregate", async () => {
+    const result = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {
+        cursorKeys: ["name"],
+      }
+    );
+
+    expect(
+      alterNodeOnResult(result, ({ name }) => ({ name })).nodes
+    ).toMatchObject([{ name: "Bill" }, { name: "Jill" }, { name: "Phill" }]);
+  });
+
+  it("should allow getting edges on aggregate", async () => {
+    const result = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {
+        cursorKeys: ["name"],
+      }
+    );
+
+    expect(
+      alterNodeOnResult(result, ({ name }) => ({ name })).edges
+    ).toMatchObject([{ name: "Bill" }, { name: "Jill" }, { name: "Phill" }]);
+  });
 });

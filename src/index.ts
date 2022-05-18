@@ -384,9 +384,10 @@ type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
   MongooseRelayPaginateInfoOnModel<MongooseRelayDocument<Q>>;
 
 /** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
-type MongooseRelayPaginateInfoOnModel<D> = {
-  cursorKeys: readonly (keyof D)[];
-} & PagingInfo;
+type MongooseRelayPaginateInfoOnModel<D> =
+  | {
+      cursorKeys?: readonly (keyof Partial<Pick<Document<D>, "_id"> & D>)[];
+    } & PagingInfo;
 
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
  * allows one to use cursor based pagination.
@@ -405,7 +406,7 @@ type MongooseRelayPaginateInfoOnModel<D> = {
  */
 export function relayPaginate<Q extends DefaultRelayQuery>(
   query: Q,
-  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfo<Q>
+  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {}
 ): MongooseQuery<
   Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
   QueryDocType<Q>,
@@ -469,13 +470,16 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
 export function aggregateRelayPaginate<T>(
   model: Model<T>,
   aggregate: PipelineStage[],
-  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T>
+  {
+    cursorKeys = ["_id"],
+    ...pagingInfo
+  }: MongooseRelayPaginateInfoOnModel<T> = {}
 ): {
   toAggregate: () => Aggregate<[RelayResult<T[]>]>;
   then: Aggregate<RelayResult<T[]>>["then"];
 } {
   const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
-  const originalSort: PipelineStage.Sort["$sort"] = aggregate
+  const originalSort: PipelineStage.Sort["$sort"] = [...aggregate]
     .reverse()
     .find((x): x is PipelineStage.Sort => !!(x as any)?.["$sort"])?.[
     "$sort"
@@ -580,7 +584,10 @@ export function aggregateRelayPaginate<T>(
 
 export function toCursorFromKeys<
   Result extends MongooseRelayDocument<DefaultRelayQuery>
->(keys: MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"], doc: Result) {
+>(
+  keys: NonNullable<MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"]>,
+  doc: Result
+) {
   return keys.reduce(
     (obj, key) => ({ ...obj, [key]: doc[key] }),
     {} as Partial<Result>
@@ -603,7 +610,9 @@ export function toCursorFromKeys<
 export function relayResultFromNodes<
   Result extends MongooseRelayDocument<DefaultRelayQuery>
 >(
-  cursorKeys: MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"],
+  cursorKeys: NonNullable<
+    MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"]
+  >,
   {
     count,
     hasNextPage,
@@ -675,7 +684,7 @@ declare module "mongoose" {
      */
     relayPaginate<Q extends DefaultRelayQuery>(
       this: Q,
-      paginateInfo: Partial<MongooseRelayPaginateInfo<Q>>
+      paginateInfo?: Partial<MongooseRelayPaginateInfo<Q>>
     ): MongooseQuery<
       RelayResult<MongooseRelayDocument<Q>[]>,
       QueryDocType<Q>,
@@ -708,7 +717,7 @@ declare module "mongoose" {
     aggregateRelayPaginate<T>(
       this: Model<T>,
       aggregate: PipelineStage[],
-      paginateInfo: Partial<MongooseRelayPaginateInfoOnModel<T>>
+      paginateInfo?: Partial<MongooseRelayPaginateInfoOnModel<T>>
     ): {
       toAggregate: <D>() => Aggregate<
         unknown extends D ? [RelayResult<T[]>] : D
