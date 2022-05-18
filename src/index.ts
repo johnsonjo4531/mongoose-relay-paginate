@@ -28,7 +28,10 @@ class AggregateOrQueryCommandReplayer<T> {
     | { type: "sort"; args: Parameters<DefaultRelayQuery<T>["sort"]> }
     | { type: "limit"; args: Parameters<DefaultRelayQuery<T>["limit"]> }
     | { type: "find"; args: Parameters<DefaultRelayQuery<T>["find"]> }
-    | { type: "aggregate"; args: Parameters<Model<T>["aggregate"]> }
+    | {
+        type: "aggregate";
+        args: [pipeline: PipelineStage.FacetPipelineStage[]];
+      }
   )[] = [];
 
   sort(...args: Parameters<DefaultRelayQuery<T>["sort"]>) {
@@ -38,7 +41,7 @@ class AggregateOrQueryCommandReplayer<T> {
     });
   }
 
-  aggregate(...args: Parameters<Model<T>["aggregate"]>) {
+  aggregate(...args: [pipeline: PipelineStage.FacetPipelineStage[]]) {
     this.commands.push({
       type: "aggregate",
       args,
@@ -57,6 +60,13 @@ class AggregateOrQueryCommandReplayer<T> {
       type: "find",
       args,
     });
+  }
+
+  toUserDefinedAggregate(
+    model: Model<T>,
+    regularAggregate: PipelineStage[]
+  ): Aggregate<T[]> {
+    return model.aggregate<T>([...regularAggregate]);
   }
 
   toLimitlessAggregate(
@@ -91,8 +101,25 @@ class AggregateOrQueryCommandReplayer<T> {
     regularAggregate: PipelineStage[],
     additionalAggregates: PipelineStage[] = []
   ): Aggregate<T[]> {
-    const stages: PipelineStage[] = this.commands.flatMap(
-      (x): PipelineStage | PipelineStage[] =>
+    const stages: PipelineStage[] = this.currentCommandsAsFacetPipelineStages();
+    return model.aggregate<T>([
+      ...regularAggregate,
+      ...stages,
+      ...additionalAggregates,
+    ]);
+  }
+
+  currentCommands() {
+    return this.commands;
+  }
+
+  currentCommandsAsFacetPipelineStages(): PipelineStage.FacetPipelineStage[] {
+    return this.commands.flatMap(
+      (
+        x
+      ):
+        | PipelineStage.FacetPipelineStage
+        | PipelineStage.FacetPipelineStage[] =>
         x.type === "find"
           ? {
               $match: x.args[0],
@@ -105,15 +132,6 @@ class AggregateOrQueryCommandReplayer<T> {
               $sort: x.args[0],
             }
     );
-    return model.aggregate<T>([
-      ...regularAggregate,
-      ...stages,
-      ...additionalAggregates,
-    ]);
-  }
-
-  currentCommands() {
-    return this.commands;
   }
 
   toQuery(query: DefaultRelayQuery<T>): DefaultRelayQuery<T> {
@@ -489,16 +507,19 @@ export function aggregateRelayPaginate<T>(
   edgesToReturn(pseudoQuery, pagingInfo, {
     originalSort,
   });
-  const nodes: Aggregate<[RelayResult<T[]>]> = pseudoQuery.toLimitlessAggregate(
-    model,
-    aggregate
-  ) as unknown as Aggregate<[RelayResult<T[]>]>;
+  const nodes: Aggregate<[RelayResult<T[]>]> =
+    pseudoQuery.toUserDefinedAggregate(
+      model,
+      aggregate
+    ) as unknown as Aggregate<[RelayResult<T[]>]>;
+  // We have to take the commands and put them in a facet?
+  // I'd rather not have them in a facet cause you can't put facets within facets, and other
+  // various pipelines also don't work.
+  //
   nodes.facet({
     count: [{ $count: "count" }],
     nodes: [
-      ...pseudoQuery.commands
-        .filter((x) => x.type === "limit")
-        .flatMap((x) => ({ $limit: x.args[0] })),
+      ...pseudoQuery.currentCommandsAsFacetPipelineStages(),
       {
         $sort: originalSort,
       },
@@ -516,8 +537,8 @@ export function aggregateRelayPaginate<T>(
       },
     ],
   });
-  nodes.unwind("$count");
-  nodes.unwind("$ends");
+  nodes.unwind({ path: "$count", preserveNullAndEmptyArrays: true });
+  nodes.unwind({ path: "$ends", preserveNullAndEmptyArrays: true });
   nodes.replaceRoot({
     nodes: "$nodes",
     edges: {
@@ -531,23 +552,57 @@ export function aggregateRelayPaginate<T>(
       },
     },
     pageInfo: {
-      count: "$count.count",
+      count: { $cond: ["$count.count", "$count.count", 0] },
       hasNextPage: {
         $cond: [
           {
-            $in: ["$ends.last._id", "$nodes._id"],
+            $or: [
+              { $eq: [!!pagingInfo.before, true] },
+              {
+                $and: [
+                  { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
+                  { $gt: [{ $size: "$nodes" }, 0] },
+                  {
+                    $cond: [
+                      {
+                        $in: ["$ends.last._id", "$nodes._id"],
+                      },
+                      false,
+                      true,
+                    ],
+                  },
+                ],
+              },
+            ],
           },
-          false,
           true,
+          false,
         ],
       },
       hasPreviousPage: {
         $cond: [
           {
-            $in: ["$ends.first._id", "$nodes._id"],
+            $or: [
+              { $eq: [!!pagingInfo.after, true] },
+              {
+                $and: [
+                  { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
+                  { $gt: [{ $size: "$nodes" }, 0] },
+                  {
+                    $cond: [
+                      {
+                        $in: ["$ends.first._id", "$nodes._id"],
+                      },
+                      false,
+                      true,
+                    ],
+                  },
+                ],
+              },
+            ],
           },
-          false,
           true,
+          false,
         ],
       },
       startCursor: { $first: "$nodes" },
