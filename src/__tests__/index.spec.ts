@@ -529,6 +529,35 @@ describe("relayPaginate", () => {
     });
   });
 
+  it("should properly compute nextPage prevPage on non-aggregate", async () => {
+    const result = await UserModel.find()
+      .sort({ name: 1 })
+      .relayPaginate({
+        cursorKeys: ["name"],
+        after: {
+          name: "Bill",
+        },
+        first: 1,
+      });
+
+    const nodes = [
+      {
+        name: "Jill",
+      },
+    ];
+    expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
+      nodes,
+      edges: nodes.map((x) => ({ node: x, cursor: x })),
+      pageInfo: {
+        count: 3,
+        hasNextPage: true,
+        hasPreviousPage: true,
+        startCursor: nodes[0],
+        endCursor: nodes[0],
+      },
+    });
+  });
+
   it("should properly compute prevPage false on aggregate", async () => {
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: 1 } }],
@@ -546,6 +575,28 @@ describe("relayPaginate", () => {
         name: "Jill",
       },
     ];
+    expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
+      nodes: [],
+      edges: [],
+      pageInfo: {
+        count: 3,
+        hasNextPage: true,
+        hasPreviousPage: false,
+      },
+    });
+  });
+
+  it("should properly compute prevPage false on non-aggregate", async () => {
+    const result = await UserModel.find()
+      .sort({ name: 1 })
+      .relayPaginate({
+        cursorKeys: ["name"],
+        before: {
+          name: "Bill",
+        },
+        first: 1,
+      });
+
     expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
       nodes: [],
       edges: [],

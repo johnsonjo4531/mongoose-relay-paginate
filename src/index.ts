@@ -7,6 +7,8 @@ import {
   Aggregate,
   QueryOptions,
   PipelineStage,
+  ObjectId,
+  Types,
 } from "mongoose";
 const DEFAULT_LIMIT = 100;
 
@@ -438,11 +440,99 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
       _id: 1,
     },
   });
-  const finalQuery = pseudoQuery.toQuery(query);
+  const finalQuery = pseudoQuery.toQuery(query.clone());
   return finalQuery.transform<Promise<RelayResult<MongooseRelayDocument<Q>[]>>>(
     async (nodes) => {
-      const countQuery = finalQuery.clone().estimatedDocumentCount();
-      const count = await countQuery;
+      const [
+        {
+          count: { count },
+          ends,
+        },
+      ] = await query.model
+        .aggregate<{
+          count: { count: number };
+          ends?: {
+            last?: { _id: Types.ObjectId };
+            first?: { _id: Types.ObjectId };
+          };
+        }>([{ $match: query.getFilter() }])
+        .facet({
+          count: [{ $count: "count" }],
+          ends: [
+            {
+              $sort: query.getOptions().sort ?? { _id: 1 },
+            },
+            {
+              $group: {
+                _id: null,
+                first: { $first: "$$ROOT" },
+                last: { $last: "$$ROOT" },
+              },
+            },
+          ],
+        })
+        .unwind({ path: "$count", preserveNullAndEmptyArrays: true })
+        .unwind({ path: "$ends", preserveNullAndEmptyArrays: true });
+
+      //     .replaceRoot({
+      //   pageInfo: {
+      //     count: { $cond: ["$count.count", "$count.count", 0] },
+      //     hasNextPage: {
+      //       $cond: [
+      //         {
+      //           $or: [
+      //             { $eq: [!!pagingInfo.before, true] },
+      //             {
+      //               $and: [
+      //                 { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
+      //                 { $gt: [nodes.length, 0] },
+      //                 {
+      //                   $cond: [
+      //                     {
+      //                       $in: ["$ends.last._id", "$nodes._id"],
+      //                     },
+      //                     false,
+      //                     true,
+      //                   ],
+      //                 },
+      //               ],
+      //             },
+      //           ],
+      //         },
+      //         true,
+      //         false,
+      //       ],
+      //     },
+      //     hasPreviousPage: {
+      //       $cond: [
+      //         {
+      //           $or: [
+      //             { $eq: [!!pagingInfo.after, true] },
+      //             {
+      //               $and: [
+      //                 { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
+      //                 { $gt: [{ $size: "$nodes" }, 0] },
+      //                 {
+      //                   $cond: [
+      //                     {
+      //                       $in: ["$ends.first._id", "$nodes._id"],
+      //                     },
+      //                     false,
+      //                     true,
+      //                   ],
+      //                 },
+      //               ],
+      //             },
+      //           ],
+      //         },
+      //         true,
+      //         false,
+      //       ],
+      //     },
+      //     startCursor: { $first: "$nodes" },
+      //     endCursor: { $last: "$nodes" },
+      //   },
+      // });
 
       const anyLimit = pagingInfo.last ?? pagingInfo.first ?? DEFAULT_LIMIT;
       return relayResultFromNodes(
@@ -450,13 +540,20 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
         {
           count,
           hasNextPage:
-            (Boolean(pagingInfo.before) && count > anyLimit) ||
-            (Boolean(pagingInfo.after) && count > anyLimit) ||
-            count >= anyLimit,
+            Boolean(pagingInfo.before) ||
+            (nodes.length > 0 &&
+              ends?.last?._id instanceof Types.ObjectId &&
+              !(nodes as { _id: Types.ObjectId }[]).some(
+                (node) => node._id?.equals(ends.last?._id ?? "") ?? false
+              )),
           hasPreviousPage:
-            (Boolean(pagingInfo.before) && count > anyLimit) ||
-            (Boolean(pagingInfo.after) && count > anyLimit) ||
-            count >= anyLimit,
+            Boolean(pagingInfo.after) ||
+            (nodes.length > 0 &&
+              ends?.first?._id instanceof Types.ObjectId &&
+              !(nodes as { _id: Types.ObjectId }[]).some(
+                (node: { _id: undefined | Types.ObjectId }) =>
+                  node._id?.equals(ends.first?._id ?? "") ?? false
+              )),
         },
         nodes as MongooseRelayDocument<Q>[]
       );
