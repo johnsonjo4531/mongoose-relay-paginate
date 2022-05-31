@@ -1,6 +1,6 @@
 {
   "name": "mongoose-relay-paginate",
-  "version": "3.2.1",
+  "version": "4.0.0",
   "description": "Uses mongoose to create a relay compatible cursor based pagination.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
