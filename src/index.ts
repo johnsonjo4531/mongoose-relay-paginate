@@ -1,4 +1,4 @@
-import {
+import mongoose, {
   Query as MongooseQuery,
   Document,
   plugin,
@@ -7,7 +7,6 @@ import {
   Aggregate,
   QueryOptions,
   PipelineStage,
-  ObjectId,
   Types,
 } from "mongoose";
 const DEFAULT_LIMIT = 100;
@@ -388,7 +387,7 @@ type QueryResult<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
   unknown,
   unknown
 >
-  ? UnwrapArray<QueryResult>[]
+  ? QueryResult
   : never;
 
 /** A helper generic type which when given a {@link DefaultRelayQuery} will construct its corresponding document node that will be part of the return type of {@link relayPaginate}. */
@@ -401,13 +400,14 @@ type MongooseRelayDocument<Q extends DefaultRelayQuery> = Document<
 
 /** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
 type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
-  MongooseRelayPaginateInfoOnModel<MongooseRelayDocument<Q>>;
+  MongooseRelayPaginateInfoOnModel<
+    Q extends MongooseQuery<unknown, unknown, unknown, infer DocType>
+      ? DocType
+      : never
+  >;
 
 /** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
-type MongooseRelayPaginateInfoOnModel<D> =
-  | {
-      cursorKeys?: readonly (keyof Partial<Pick<Document<D>, "_id"> & D>)[];
-    } & PagingInfo;
+type MongooseRelayPaginateInfoOnModel<D> = PagingInfo<D>; // | UnwrapArray<D> extends Document<unknown, unknown, infer G> ? G : never
 
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
  * allows one to use cursor based pagination.
@@ -426,7 +426,7 @@ type MongooseRelayPaginateInfoOnModel<D> =
  */
 export function relayPaginate<Q extends DefaultRelayQuery>(
   query: Q,
-  { cursorKeys = ["_id"], ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {}
+  { ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {}
 ): MongooseQuery<
   Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
   QueryDocType<Q>,
@@ -435,32 +435,29 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
 > &
   QueryHelpers<Q> {
   const pseudoQuery = new AggregateOrQueryCommandReplayer();
+  const originalSort = query.getOptions().sort ?? {
+    _id: 1,
+  };
   edgesToReturn(pseudoQuery, pagingInfo, {
-    originalSort: query.getOptions().sort ?? {
-      _id: 1,
-    },
+    originalSort,
   });
   const finalQuery = pseudoQuery.toQuery(query.clone());
   return finalQuery.transform<Promise<RelayResult<MongooseRelayDocument<Q>[]>>>(
-    async (nodes) => {
-      const [
-        {
-          count: { count },
-          ends,
-        },
-      ] = await query.model
+    async (_nodes) => {
+      const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
+      const beforeAfterCount =
+        (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
+      const [{ count, hasNextPage, hasPreviousPage }] = await query.model
         .aggregate<{
-          count: { count: number };
-          ends?: {
-            last?: { _id: Types.ObjectId };
-            first?: { _id: Types.ObjectId };
-          };
+          count: number;
+          hasNextPage: boolean;
+          hasPreviousPage: boolean;
         }>([{ $match: query.getFilter() }])
         .facet({
           count: [{ $count: "count" }],
           ends: [
             {
-              $sort: query.getOptions().sort ?? { _id: 1 },
+              $sort: originalSort,
             },
             {
               $group: {
@@ -472,88 +469,97 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
           ],
         })
         .unwind({ path: "$count", preserveNullAndEmptyArrays: true })
-        .unwind({ path: "$ends", preserveNullAndEmptyArrays: true });
-
-      //     .replaceRoot({
-      //   pageInfo: {
-      //     count: { $cond: ["$count.count", "$count.count", 0] },
-      //     hasNextPage: {
-      //       $cond: [
-      //         {
-      //           $or: [
-      //             { $eq: [!!pagingInfo.before, true] },
-      //             {
-      //               $and: [
-      //                 { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
-      //                 { $gt: [nodes.length, 0] },
-      //                 {
-      //                   $cond: [
-      //                     {
-      //                       $in: ["$ends.last._id", "$nodes._id"],
-      //                     },
-      //                     false,
-      //                     true,
-      //                   ],
-      //                 },
-      //               ],
-      //             },
-      //           ],
-      //         },
-      //         true,
-      //         false,
-      //       ],
-      //     },
-      //     hasPreviousPage: {
-      //       $cond: [
-      //         {
-      //           $or: [
-      //             { $eq: [!!pagingInfo.after, true] },
-      //             {
-      //               $and: [
-      //                 { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
-      //                 { $gt: [{ $size: "$nodes" }, 0] },
-      //                 {
-      //                   $cond: [
-      //                     {
-      //                       $in: ["$ends.first._id", "$nodes._id"],
-      //                     },
-      //                     false,
-      //                     true,
-      //                   ],
-      //                 },
-      //               ],
-      //             },
-      //           ],
-      //         },
-      //         true,
-      //         false,
-      //       ],
-      //     },
+        .unwind({ path: "$ends", preserveNullAndEmptyArrays: true })
+        .replaceRoot({
+          count: { $cond: ["$count.count", "$count.count", 0] },
+          hasNextPage: {
+            $cond: [
+              {
+                $or: [
+                  {
+                    $and: [
+                      { $eq: [!!pagingInfo.before, true] },
+                      { $gte: ["$count", beforeAfterCount] },
+                    ],
+                  },
+                  {
+                    $and: [
+                      { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
+                      { $gt: [nodes.length, 0] },
+                      {
+                        $cond: [
+                          {
+                            $in: ["$ends.last._id", nodes.map((x) => x._id)],
+                          },
+                          false,
+                          true,
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+          hasPreviousPage: {
+            $cond: [
+              {
+                $or: [
+                  {
+                    $and: [
+                      { $eq: [!!pagingInfo.after, true] },
+                      { $gte: ["$count", beforeAfterCount] },
+                    ],
+                  },
+                  {
+                    $and: [
+                      { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
+                      { $gt: [nodes.length, 0] },
+                      {
+                        $cond: [
+                          {
+                            $in: ["$ends.first._id", nodes.map((x) => x._id)],
+                          },
+                          false,
+                          true,
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+        });
       //     startCursor: { $first: "$nodes" },
       //     endCursor: { $last: "$nodes" },
       //   },
       // });
 
-      const anyLimit = pagingInfo.last ?? pagingInfo.first ?? DEFAULT_LIMIT;
       return relayResultFromNodes(
-        cursorKeys,
+        Object.keys(originalSort) as any,
         {
-          count,
-          hasNextPage:
-            Boolean(pagingInfo.before) ||
-            (nodes.length > 0 &&
-              ends?.last?._id instanceof Types.ObjectId &&
-              !(nodes as { _id: Types.ObjectId }[]).some(
-                (node) => node._id?.equals(ends.last?._id ?? "") ?? false
-              )),
-          hasPreviousPage:
-            Boolean(pagingInfo.after) ||
-            (nodes.length > 0 &&
-              ends?.first?._id instanceof Types.ObjectId &&
-              !(nodes as { _id: Types.ObjectId }[]).some(
-                (node: { _id: undefined | Types.ObjectId }) =>
-                  node._id?.equals(ends.first?._id ?? "") ?? false
-              )),
+          count: count ?? 0,
+          hasNextPage,
+          // Boolean(pagingInfo.before) ||
+          // (nodes.length > 0 &&
+          //   ends?.last?._id instanceof Types.ObjectId &&
+          //   !(nodes as { _id: Types.ObjectId }[]).some(
+          //     (node) => node._id?.equals(ends.last?._id ?? "") ?? false
+          //   )),
+          hasPreviousPage,
+          // :
+          // Boolean(pagingInfo.after) ||
+          // (nodes.length > 0 &&
+          //   ends?.first?._id instanceof Types.ObjectId &&
+          //   !(nodes as { _id: Types.ObjectId }[]).some(
+          //     (node: { _id: undefined | Types.ObjectId }) =>
+          //       node._id?.equals(ends.first?._id ?? "") ?? false
+          //   )),
         },
         nodes as MongooseRelayDocument<Q>[]
       );
@@ -585,10 +591,7 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
 export function aggregateRelayPaginate<T>(
   model: Model<T>,
   aggregate: PipelineStage[],
-  {
-    cursorKeys = ["_id"],
-    ...pagingInfo
-  }: MongooseRelayPaginateInfoOnModel<T> = {}
+  { ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T> = {}
 ): {
   toAggregate: () => Aggregate<[RelayResult<T[]>]>;
   then: Aggregate<RelayResult<T[]>>["then"];
@@ -636,6 +639,8 @@ export function aggregateRelayPaginate<T>(
   });
   nodes.unwind({ path: "$count", preserveNullAndEmptyArrays: true });
   nodes.unwind({ path: "$ends", preserveNullAndEmptyArrays: true });
+  const beforeAfterCount =
+    (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
   nodes.replaceRoot({
     nodes: "$nodes",
     edges: {
@@ -654,7 +659,12 @@ export function aggregateRelayPaginate<T>(
         $cond: [
           {
             $or: [
-              { $eq: [!!pagingInfo.before, true] },
+              {
+                $and: [
+                  { $eq: [!!pagingInfo.before, true] },
+                  { $gte: ["$count", beforeAfterCount] },
+                ],
+              },
               {
                 $and: [
                   { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
@@ -680,7 +690,12 @@ export function aggregateRelayPaginate<T>(
         $cond: [
           {
             $or: [
-              { $eq: [!!pagingInfo.after, true] },
+              {
+                $and: [
+                  { $eq: [!!pagingInfo.after, true] },
+                  { $gte: ["$count", beforeAfterCount] },
+                ],
+              },
               {
                 $and: [
                   { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
@@ -706,7 +721,7 @@ export function aggregateRelayPaginate<T>(
       endCursor: { $last: "$nodes" },
     },
   });
-  const cursorProjection = cursorKeys.reduce(
+  const cursorProjection = Object.keys(originalSort as any).reduce(
     (cursorProjection, key) => ({ ...cursorProjection, [key]: 1 }),
     {}
   );
@@ -737,7 +752,9 @@ export function aggregateRelayPaginate<T>(
 export function toCursorFromKeys<
   Result extends MongooseRelayDocument<DefaultRelayQuery>
 >(
-  keys: NonNullable<MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"]>,
+  keys: (keyof NonNullable<
+    MongooseRelayPaginateInfoOnModel<Result>["after"]
+  >)[],
   doc: Result
 ) {
   return keys.reduce(
@@ -762,9 +779,9 @@ export function toCursorFromKeys<
 export function relayResultFromNodes<
   Result extends MongooseRelayDocument<DefaultRelayQuery>
 >(
-  cursorKeys: NonNullable<
-    MongooseRelayPaginateInfoOnModel<Result>["cursorKeys"]
-  >,
+  cursorKeys: (keyof NonNullable<
+    MongooseRelayPaginateInfoOnModel<Result>["after"]
+  >)[],
   {
     count,
     hasNextPage,
