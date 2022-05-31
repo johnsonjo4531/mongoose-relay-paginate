@@ -25,7 +25,7 @@ const FeatureList: FeatureItem[] = [
     description: (
       <>
         Turns documents to nodes, edges, and paging information. Just provide a
-        query and a cursorKeys option.
+        query and some pagination options.
       </>
     ),
   },

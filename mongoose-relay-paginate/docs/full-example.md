@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Full Example
@@ -67,7 +67,6 @@ async function run(): Promise<void> {
   const result = await UserModel.find()
 			.sort({ name: -1 })
 			.relayPaginate({
-				cursorKeys: ["name"],
 				first: 1,
 			});
 

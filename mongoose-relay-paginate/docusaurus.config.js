@@ -64,6 +64,11 @@ const config = {
             label: 'GitHub',
             position: 'right',
           },
+          {
+            href: 'https://www.npmjs.com/package/mongoose-relay-paginate',
+            label: 'npm',
+            position: 'right',
+          },
         ],
       },
       footer: {
@@ -102,6 +107,11 @@ const config = {
                 label: 'GitHub',
                 href: 'https://github.com/johnsonjo4531/mongoose-relay-paginate',
               },
+
+              {
+                href: 'https://www.npmjs.com/package/mongoose-relay-paginate',
+                label: 'npm',
+              }
             ],
           },
         ],

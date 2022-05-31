@@ -183,8 +183,6 @@ type DefaultInnerRelayQuery<T = unknown> = AggregateOrQueryCommandReplayer<T>;
  * }        -> some tranform to a cursor  -> {name: "bob"}
  * ```
  *
- * an example of how one would make this transform in particular the way this library does it through its cursorKeys option:
- *
  * @public
  */
 export type PagingCursor<DocType = unknown> = Partial<DocType>;
@@ -398,7 +396,7 @@ type MongooseRelayDocument<Q extends DefaultRelayQuery> = Document<
 > &
   QueryRawDocType<Q>;
 
-/** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
+/** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} constructs the document type needed. */
 type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
   MongooseRelayPaginateInfoOnModel<
     Q extends MongooseQuery<unknown, unknown, unknown, infer DocType>
@@ -406,7 +404,7 @@ type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
       : never
   >;
 
-/** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding `cursorKeys` type. */
+/** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding document type. */
 type MongooseRelayPaginateInfoOnModel<D> = PagingInfo<D>; // | UnwrapArray<D> extends Document<unknown, unknown, infer G> ? G : never
 
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
