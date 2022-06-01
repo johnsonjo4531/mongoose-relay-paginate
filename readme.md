@@ -2,13 +2,17 @@
   <img src="./mongoose-relay-paginate/static/img/logo.png" />
 </p>
 
+## Compatible MongoDB versions
+
+Your instance of MongoDB should be running version 4.4 or later.
+
 ## Docs
 
 View the [docs](https://johnsonjo4531.github.io/mongoose-relay-paginate/)
 
 ## What
 
-This library is meant to allow cursor based pagination between the client and the server. You might want to read why cursor based pagination over
+This library is meant to allow cursor based pagination between the client and the server.
 
 ## Why
 
