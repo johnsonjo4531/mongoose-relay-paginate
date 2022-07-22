@@ -73,4 +73,29 @@ const result = await UserModel
   });
 ```
 
+The result will always come back in the form of:
+
+```
+type result = {
+  nodes: UserModel[],
+  edges: {
+    node: UserModel,
+    cursor: {
+      // whatever fields were sorted on or just _id
+    }
+  },
+  pageInfo: {
+    count: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    endCursor: {
+      // whatever fields were sorted on or just _id
+    };
+    startCursor: {
+      // whatever fields were sorted on or just _id
+    };
+  }
+}
+```
+
 For more details view the [docs](https://johnsonjo4531.github.io/mongoose-relay-paginate/).
