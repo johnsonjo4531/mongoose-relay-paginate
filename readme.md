@@ -75,7 +75,7 @@ const result = await UserModel
 
 The result will always come back in the form of:
 
-```
+```ts
 type result = {
   nodes: UserModel[],
   edges: {
