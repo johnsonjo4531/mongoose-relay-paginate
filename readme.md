@@ -4,7 +4,21 @@
 
 ## Compatible MongoDB versions
 
-Your instance of MongoDB should be running version 4.4 or later.
+Your instance of MongoDB should be running version 4.4 or later. Your version of mongoose should be 7.5.1 or later
+
+## Migration
+
+### v4.0.0 to v5.0.0
+
+#### Registering the plugin
+
+v4 allowed this library to
+
+#### Sending in types
+
+Version 4 of this library tried to provide types for you out of the box, but version 5 now requires you to type your own models. This will make maintenance of this library less likely to break between many different changes to TypeScript types i.e. v5 will provide more future proof types.
+
+For v5.0.0 to get Mongoose to return the right types
 
 ## Docs
 
@@ -36,18 +50,60 @@ Because no existing pagination for mongoose that I can find was all of the follo
 To use this library first install in your project, like so:
 
 ```bash
-yarn add mongoose-relay-paginate
+npm i mongoose-relay-paginate
 ```
 
-Then you need to register the plugin by importing the library at the top of your entry file:
+Then you need to register the plugin sometime before you create your models see [mongoose's global plugins documentation](https://mongoosejs.com/docs/plugins.html#global
+) for help:
 
 ```ts
-import "mongoose-relay-paginate"
+import {plugin, Model, model, Schema } from "mongoose";
+import {relayPaginatePlugin} from "mongoose-relay-paginate";
+
+// 0. Register the relay paginate plugins.
+plugin(
+  relayPaginatePlugin({
+    // Send in options
+    maxLimit: 100,
+  })
+);
+
+// 1. Create an interface representing a document in MongoDB.
+interface User {
+  _id: mongoose.Types.ObjectId;
+  myId: number;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
+// 2. Setup various types.
+interface UserQueryHelpers {}
+
+interface UserMethods {}
+
+type MyUserMethods = UserMethods;
+
+type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
+
+type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
+  RelayPaginateStatics;
+
+// 3. Create a Schema corresponding to the document interface.
+const schema = new Schema<User, UserModel, MyUserMethods>({
+  myId: Number,
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  avatar: String,
+});
+
+// 4. Create your Model.
+const UserModel = model<User, UserModel>("User", schema);
 ```
 
 ## Usage
 
-Now the relayPaginate should be available on your mongoose queries.
+Now the relayPaginate should be available on your model's mongoose queries, so you can use it as shown below.
 
 
 ```ts
@@ -55,7 +111,8 @@ Now the relayPaginate should be available on your mongoose queries.
 const result = await UserModel.find()
   // sorting by id from largest (most recent)--> to smallest (most early) using mongoose's default sort.
   .sort({ _id: -1 })
-  // This library's `relayPaginate` can be used off of any mongoose query.
+  // This library's `relayPaginate` can now be used off your query
+  // after the above setup.
   .relayPaginate({
     first: 1,
   });

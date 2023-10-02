@@ -1,10 +1,24 @@
-import { alterNodeOnResult, relayPaginate } from "..";
-import { Schema, model, connect } from "mongoose";
+import {
+  RelayPaginateStatics,
+  RelayPaginateQueryHelper,
+  alterNodeOnResult,
+  relayPaginate,
+  relayPaginatePlugin,
+} from "..";
+import { Schema, model, connect, Model, plugin } from "mongoose";
 import mongoose from "mongoose";
 // Connection url
 const url = "mongodb://localhost:32782";
 // Database Name
 const dbName = "mongo-relay-connection";
+
+// 0. Register the relay paginate plugins.
+plugin(
+  relayPaginatePlugin({
+    // Send in options
+    maxLimit: 100,
+  })
+);
 
 // 1. Create an interface representing a document in MongoDB.
 interface User {
@@ -15,18 +29,30 @@ interface User {
   avatar?: string;
 }
 
-// 2. Create a Schema corresponding to the document interface.
-const schema = new Schema<User>({
+// 2. Setup various types.
+interface UserQueryHelpers {}
+
+interface UserMethods {}
+
+type MyUserMethods = UserMethods;
+
+type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
+
+type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
+  RelayPaginateStatics;
+
+// 3. Create a Schema corresponding to the document interface.
+const schema = new Schema<User, UserModel, MyUserMethods>({
   myId: Number,
   name: { type: String, required: true },
   email: { type: String, required: true },
   avatar: String,
 });
 
-// 3. Create a Model.
-const UserModel = model<User>("User", schema); // 3. Create a Model.
-const EmptyModel = model<User>("Empty", schema);
-const TrickyModel = model<User>("Tricky", schema);
+// 4. Create your Model.
+const UserModel = model<User, UserModel>("User", schema); // 3. Create a Model.
+const EmptyModel = model<User, UserModel>("Empty", schema);
+const TrickyModel = model<User, UserModel>("Tricky", schema);
 
 async function run(): Promise<void> {
   // 4. Connect to MongoDB
@@ -75,9 +101,9 @@ async function run(): Promise<void> {
   await doc3.save();
 }
 
+jest.setTimeout(10_000);
 describe("relayPaginate", () => {
   beforeAll(async () => {
-    jest.setTimeout(10_000);
     await run();
   });
 

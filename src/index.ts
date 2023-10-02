@@ -1,5 +1,5 @@
-import mongoose, {
-  Query as MongooseQuery,
+import {
+  QueryWithHelpers,
   Document,
   plugin,
   Schema,
@@ -7,35 +7,50 @@ import mongoose, {
   Aggregate,
   QueryOptions,
   PipelineStage,
-  Types,
+  FilterQuery,
+  ProjectionType,
+  HydratedDocument,
 } from "mongoose";
 const DEFAULT_LIMIT = 100;
+
+type FindArgs<DocType = unknown> =
+  | [Record<string, FilterQuery<DocType>>]
+  | [Record<string, FilterQuery<DocType>>, ProjectionType<DocType>]
+  | [
+      Record<string, FilterQuery<DocType>>,
+      ProjectionType<DocType>,
+      QueryOptions<DocType>
+    ];
+
+type SortArgs = [Record<string, -1 | 1>];
+
+type LimitArgs = [number];
 
 /** A default query used throughout this file to help our mongoose queries have an expected structure
  * that the relay specification relies on.
  */
-type DefaultRelayQuery<T = unknown> = MongooseQuery<
+type DefaultRelayQuery<T = unknown, QueryHelpers = unknown> = QueryWithHelpers<
   T[],
-  unknown,
-  unknown,
-  Document
+  T,
+  QueryHelpers
 >;
 
+const g = {} as any;
 /** A mock query structure for our defaultRelayQuery that can play back commands as either an aggregate or
  * a query.
  */
 class AggregateOrQueryCommandReplayer<T> {
   commands: (
-    | { type: "sort"; args: Parameters<DefaultRelayQuery<T>["sort"]> }
-    | { type: "limit"; args: Parameters<DefaultRelayQuery<T>["limit"]> }
-    | { type: "find"; args: Parameters<DefaultRelayQuery<T>["find"]> }
+    | { type: "sort"; args: SortArgs }
+    | { type: "limit"; args: LimitArgs }
+    | { type: "find"; args: FindArgs<T> }
     | {
         type: "aggregate";
         args: [pipeline: PipelineStage.FacetPipelineStage[]];
       }
   )[] = [];
 
-  sort(...args: Parameters<DefaultRelayQuery<T>["sort"]>) {
+  sort(...args: SortArgs) {
     this.commands.push({
       type: "sort",
       args,
@@ -49,14 +64,14 @@ class AggregateOrQueryCommandReplayer<T> {
     });
   }
 
-  limit(...args: Parameters<DefaultRelayQuery<T>["limit"]>) {
+  limit(...args: LimitArgs) {
     this.commands.push({
       type: "limit",
       args,
     });
   }
 
-  find(...args: Parameters<DefaultRelayQuery<T>["find"]>) {
+  find(...args: FindArgs<T>) {
     this.commands.push({
       type: "find",
       args,
@@ -247,10 +262,12 @@ const edgesToReturn = function EdgesToReturn<
     // );
     edges.sort(
       Object.fromEntries(
-        Object.entries(originalSort).map(([key, value]) => [
-          key,
-          typeof value === "number" ? (value >= 0 ? -1 : 1) : null,
-        ])
+        Object.entries(originalSort)
+          .map(([key, value]) => [
+            key,
+            typeof value === "number" ? (value >= 0 ? -1 : 1) : null,
+          ])
+          .filter((x): x is [string, 1 | -1] => Boolean(x[1]))
       )
     );
     edges.limit(last);
@@ -314,7 +331,6 @@ type ElementOfArray<Array extends unknown[]> = Array extends (infer T)[]
   ? T
   : never;
 
-type UnwrapArray<MaybeArray> = MaybeArray extends (infer T)[] ? T : MaybeArray;
 export interface RelayResult<Nodes extends unknown[]> {
   edges: {
     node: ElementOfArray<Nodes>;
@@ -349,7 +365,7 @@ export interface TransformedRelayResult<
 }
 
 /** A helper generic type which when given a DefaultRelayQuery will infer its RawDocType */
-type QueryRawDocType<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
+type QueryRawDocType<Q extends DefaultRelayQuery> = Q extends QueryWithHelpers<
   unknown,
   unknown,
   unknown,
@@ -359,7 +375,7 @@ type QueryRawDocType<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
   : never;
 
 /** A helper generic type which when given a DefaultRelayQuery will infer the DocType */
-type QueryDocType<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
+type QueryDocType<Q extends DefaultRelayQuery> = Q extends QueryWithHelpers<
   unknown,
   infer DocType,
   unknown,
@@ -369,7 +385,7 @@ type QueryDocType<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
   : never;
 
 /** A helper generic type which when given a DefaultRelayQuery will infer its QueryHelpers */
-type QueryHelpers<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
+type QueryHelpers<Q extends DefaultRelayQuery> = Q extends QueryWithHelpers<
   unknown,
   unknown,
   infer QueryHelpers,
@@ -379,7 +395,7 @@ type QueryHelpers<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
   : never;
 
 /** A helper generic type which when given a DefaultRelayQuery will infer the QueryResult */
-type QueryResult<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
+type QueryResult<Q extends DefaultRelayQuery> = Q extends QueryWithHelpers<
   infer QueryResult,
   unknown,
   unknown,
@@ -388,18 +404,28 @@ type QueryResult<Q extends DefaultRelayQuery> = Q extends MongooseQuery<
   ? QueryResult
   : never;
 
+type ModelRawDocType<M extends Model<unknown>> = M extends Model<
+  infer RawDocType,
+  unknown,
+  unknown,
+  unknown,
+  unknown,
+  unknown
+>
+  ? RawDocType
+  : never;
+
 /** A helper generic type which when given a {@link DefaultRelayQuery} will construct its corresponding document node that will be part of the return type of {@link relayPaginate}. */
-type MongooseRelayDocument<Q extends DefaultRelayQuery> = Document<
+type MongooseRelayDocument<Q extends DefaultRelayQuery> = HydratedDocument<
   QueryResult<Q>,
-  QueryHelpers<Q>,
-  QueryDocType<Q>
-> &
-  QueryRawDocType<Q>;
+  QueryDocType<Q>,
+  QueryHelpers<Q>
+>;
 
 /** A helper generic type which when given a {@link DefaultRelayQuery} and {@link PagingCursor} constructs the document type needed. */
 type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
   MongooseRelayPaginateInfoOnModel<
-    Q extends MongooseQuery<unknown, unknown, unknown, infer DocType>
+    Q extends QueryWithHelpers<unknown, unknown, unknown, infer DocType>
       ? DocType
       : never
   >;
@@ -425,13 +451,12 @@ type MongooseRelayPaginateInfoOnModel<D> = PagingInfo<D>; // | UnwrapArray<D> ex
 export function relayPaginate<Q extends DefaultRelayQuery>(
   query: Q,
   { ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {}
-): MongooseQuery<
+): QueryWithHelpers<
   Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
   QueryDocType<Q>,
   QueryHelpers<Q>,
   QueryRawDocType<Q>
-> &
-  QueryHelpers<Q> {
+> {
   const pseudoQuery = new AggregateOrQueryCommandReplayer();
   const originalSort = query.getOptions().sort ?? {
     _id: 1,
@@ -440,129 +465,127 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
     originalSort,
   });
   const finalQuery = pseudoQuery.toQuery(query.clone());
-  return finalQuery.transform<Promise<RelayResult<MongooseRelayDocument<Q>[]>>>(
-    async (_nodes) => {
-      const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
-      const beforeAfterCount =
-        (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
-      const [{ count, hasNextPage, hasPreviousPage }] = await query.model
-        .aggregate<{
-          count: number;
-          hasNextPage: boolean;
-          hasPreviousPage: boolean;
-        }>([{ $match: query.getFilter() }])
-        .facet({
-          count: [{ $count: "count" }],
-          ends: [
-            {
-              $sort: originalSort,
+  return finalQuery.transform(async (_nodes) => {
+    const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
+    const beforeAfterCount =
+      (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
+    const [{ count, hasNextPage, hasPreviousPage }] = await query.model
+      .aggregate<{
+        count: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+      }>([{ $match: query.getFilter() }])
+      .facet({
+        count: [{ $count: "count" }],
+        ends: [
+          {
+            $sort: originalSort,
+          },
+          {
+            $group: {
+              _id: null,
+              first: { $first: "$$ROOT" },
+              last: { $last: "$$ROOT" },
             },
+          },
+        ],
+      })
+      .unwind({ path: "$count", preserveNullAndEmptyArrays: true })
+      .unwind({ path: "$ends", preserveNullAndEmptyArrays: true })
+      .replaceRoot({
+        count: { $cond: ["$count.count", "$count.count", 0] },
+        hasNextPage: {
+          $cond: [
             {
-              $group: {
-                _id: null,
-                first: { $first: "$$ROOT" },
-                last: { $last: "$$ROOT" },
-              },
+              $or: [
+                {
+                  $and: [
+                    { $eq: [!!pagingInfo.before, true] },
+                    { $gte: ["$count", beforeAfterCount] },
+                  ],
+                },
+                {
+                  $and: [
+                    { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
+                    { $gt: [nodes.length, 0] },
+                    {
+                      $cond: [
+                        {
+                          $in: ["$ends.last._id", nodes.map((x) => x._id)],
+                        },
+                        false,
+                        true,
+                      ],
+                    },
+                  ],
+                },
+              ],
             },
+            true,
+            false,
           ],
-        })
-        .unwind({ path: "$count", preserveNullAndEmptyArrays: true })
-        .unwind({ path: "$ends", preserveNullAndEmptyArrays: true })
-        .replaceRoot({
-          count: { $cond: ["$count.count", "$count.count", 0] },
-          hasNextPage: {
-            $cond: [
-              {
-                $or: [
-                  {
-                    $and: [
-                      { $eq: [!!pagingInfo.before, true] },
-                      { $gte: ["$count", beforeAfterCount] },
-                    ],
-                  },
-                  {
-                    $and: [
-                      { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
-                      { $gt: [nodes.length, 0] },
-                      {
-                        $cond: [
-                          {
-                            $in: ["$ends.last._id", nodes.map((x) => x._id)],
-                          },
-                          false,
-                          true,
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              true,
-              false,
-            ],
-          },
-          hasPreviousPage: {
-            $cond: [
-              {
-                $or: [
-                  {
-                    $and: [
-                      { $eq: [!!pagingInfo.after, true] },
-                      { $gte: ["$count", beforeAfterCount] },
-                    ],
-                  },
-                  {
-                    $and: [
-                      { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
-                      { $gt: [nodes.length, 0] },
-                      {
-                        $cond: [
-                          {
-                            $in: ["$ends.first._id", nodes.map((x) => x._id)],
-                          },
-                          false,
-                          true,
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              true,
-              false,
-            ],
-          },
-        });
-      //     startCursor: { $first: "$nodes" },
-      //     endCursor: { $last: "$nodes" },
-      //   },
-      // });
-
-      return relayResultFromNodes(
-        Object.keys(originalSort) as any,
-        {
-          count: count ?? 0,
-          hasNextPage,
-          // Boolean(pagingInfo.before) ||
-          // (nodes.length > 0 &&
-          //   ends?.last?._id instanceof Types.ObjectId &&
-          //   !(nodes as { _id: Types.ObjectId }[]).some(
-          //     (node) => node._id?.equals(ends.last?._id ?? "") ?? false
-          //   )),
-          hasPreviousPage,
-          // :
-          // Boolean(pagingInfo.after) ||
-          // (nodes.length > 0 &&
-          //   ends?.first?._id instanceof Types.ObjectId &&
-          //   !(nodes as { _id: Types.ObjectId }[]).some(
-          //     (node: { _id: undefined | Types.ObjectId }) =>
-          //       node._id?.equals(ends.first?._id ?? "") ?? false
-          //   )),
         },
-        nodes as MongooseRelayDocument<Q>[]
-      );
-    }
-  ) as MongooseQuery<
+        hasPreviousPage: {
+          $cond: [
+            {
+              $or: [
+                {
+                  $and: [
+                    { $eq: [!!pagingInfo.after, true] },
+                    { $gte: ["$count", beforeAfterCount] },
+                  ],
+                },
+                {
+                  $and: [
+                    { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
+                    { $gt: [nodes.length, 0] },
+                    {
+                      $cond: [
+                        {
+                          $in: ["$ends.first._id", nodes.map((x) => x._id)],
+                        },
+                        false,
+                        true,
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            true,
+            false,
+          ],
+        },
+      });
+    //     startCursor: { $first: "$nodes" },
+    //     endCursor: { $last: "$nodes" },
+    //   },
+    // });
+
+    return relayResultFromNodes(
+      Object.keys(originalSort) as any,
+      {
+        count: count ?? 0,
+        hasNextPage,
+        // Boolean(pagingInfo.before) ||
+        // (nodes.length > 0 &&
+        //   ends?.last?._id instanceof Types.ObjectId &&
+        //   !(nodes as { _id: Types.ObjectId }[]).some(
+        //     (node) => node._id?.equals(ends.last?._id ?? "") ?? false
+        //   )),
+        hasPreviousPage,
+        // :
+        // Boolean(pagingInfo.after) ||
+        // (nodes.length > 0 &&
+        //   ends?.first?._id instanceof Types.ObjectId &&
+        //   !(nodes as { _id: Types.ObjectId }[]).some(
+        //     (node: { _id: undefined | Types.ObjectId }) =>
+        //       node._id?.equals(ends.first?._id ?? "") ?? false
+        //   )),
+      },
+      nodes as MongooseRelayDocument<Q>[]
+    );
+  }) as QueryWithHelpers<
     Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
     QueryDocType<Q>,
     QueryHelpers<Q>,
@@ -827,90 +850,97 @@ export function alterNodeOnResult<Result, U>(
   };
 }
 
-declare module "mongoose" {
-  interface Query<
-    ResultType /* eslint-disable-line */,
-    DocType /* eslint-disable-line */,
-    THelpers = {} /* eslint-disable-line */,
-    RawDocType = DocType /* eslint-disable-line */
-  > {
-    /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
-     * allows one to use cursor based pagination.
-     *
-     * For more on cursors see {@link PagingCursor}
-     *
-     * For more info on using cursor based pagination algorithms like relay see:
-     *
-     * {@link https://relay.dev/docs/guides/graphql-server-specification/  the documentation for relay's connection spec} (look at this one for docs in more laymans terms),
-     *
-     * {@link https://relay.dev/graphql/connections.htm  the actual relay spec} (look at this one for very exact and concise, but possibly confusing language),
-     *
-     * @param this the query to add pagination to
-     * @param paginationInfo the information to help with the paging
-     * @returns
-     */
-    relayPaginate<Q extends DefaultRelayQuery>(
-      this: Q,
-      paginateInfo?: Partial<MongooseRelayPaginateInfo<Q>>
-    ): MongooseQuery<
-      RelayResult<MongooseRelayDocument<Q>[]>,
-      QueryDocType<Q>,
-      QueryHelpers<Q>,
-      QueryRawDocType<Q>
-    > &
-      QueryHelpers<Q>;
-  }
-  interface Model<
-    T /* eslint-disable-line */,
-    TQueryHelpers = {} /* eslint-disable-line */,
-    TMethodsAndOverrides = {} /* eslint-disable-line */,
-    TVirtuals = {} /* eslint-disable-line */
-  > {
-    /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
-     * allows one to use cursor based pagination.
-     *
-     * For more on cursors see {@link PagingCursor}
-     *
-     * For more info on using cursor based pagination algorithms like relay see:
-     *
-     * {@link https://relay.dev/docs/guides/graphql-server-specification/  the documentation for relay's connection spec} (look at this one for docs in more laymans terms),
-     *
-     * {@link https://relay.dev/graphql/connections.htm  the actual relay spec} (look at this one for very exact and concise, but possibly confusing language),
-     *
-     * @param this the Model to add pagination through an aggregate to
-     * @param paginationInfo the information to help with the paging
-     * @returns
-     */
-    aggregateRelayPaginate<T>(
-      this: Model<T>,
-      aggregate: PipelineStage[],
-      paginateInfo?: Partial<MongooseRelayPaginateInfoOnModel<T>>
-    ): {
-      toAggregate: <D>() => Aggregate<
-        unknown extends D ? [RelayResult<T[]>] : D
-      >;
-      then: Aggregate<RelayResult<T[]>>["then"];
-    };
-  }
+// declare module "mongoose" {
+export interface RelayPaginateQueryHelper {
+  /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
+   * allows one to use cursor based pagination.
+   *
+   * For more on cursors see {@link PagingCursor}
+   *
+   * For more info on using cursor based pagination algorithms like relay see:
+   *
+   * {@link https://relay.dev/docs/guides/graphql-server-specification/  the documentation for relay's connection spec} (look at this one for docs in more laymans terms),
+   *
+   * {@link https://relay.dev/graphql/connections.htm  the actual relay spec} (look at this one for very exact and concise, but possibly confusing language),
+   *
+   * @param this the query to add pagination to
+   * @param paginationInfo the information to help with the paging
+   * @returns
+   */
+  relayPaginate<Q extends DefaultRelayQuery>(
+    this: Q,
+    paginateInfo?: Partial<MongooseRelayPaginateInfo<Q>>
+  ): QueryWithHelpers<
+    RelayResult<MongooseRelayDocument<Q>[]>,
+    QueryDocType<Q>,
+    QueryHelpers<Q>,
+    QueryRawDocType<Q>
+  > &
+    QueryHelpers<Q>;
+}
+export interface RelayPaginateStatics {
+  /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
+   * allows one to use cursor based pagination.
+   *
+   * For more on cursors see {@link PagingCursor}
+   *
+   * For more info on using cursor based pagination algorithms like relay see:
+   *
+   * {@link https://relay.dev/docs/guides/graphql-server-specification/  the documentation for relay's connection spec} (look at this one for docs in more laymans terms),
+   *
+   * {@link https://relay.dev/graphql/connections.htm  the actual relay spec} (look at this one for very exact and concise, but possibly confusing language),
+   *
+   * @param this the Model to add pagination through an aggregate to
+   * @param paginationInfo the information to help with the paging
+   * @returns
+   */
+  aggregateRelayPaginate<M extends Model<any>>(
+    this: M,
+    aggregate: PipelineStage[],
+    paginateInfo?: Partial<MongooseRelayPaginateInfoOnModel<ModelRawDocType<M>>>
+  ): {
+    toAggregate: <D>() => Aggregate<
+      unknown extends D ? [RelayResult<ModelRawDocType<M>[]>] : D
+    >;
+    then: Aggregate<RelayResult<ModelRawDocType<M>[]>>["then"];
+  };
+}
+// }
+
+/** Options for the relayPaginatePlugin */
+export interface PluginOptions {
+  /** the maximum allowed limit for any query,
+   * so that the client can't request over this
+   * amount of items paged at a time.
+   *
+   * @default 100
+   **/
+  maxLimit?: number;
 }
 
 /** Creates the relay paginate plugin, so that you can use relayPaginate
- * @private
  */
-function relayPaginatePlugin(schema: Schema) {
-  (schema.query as any) /* eslint-disable-line */.relayPaginate = function (
-    paging: any /* eslint-disable-line */
-  ) {
-    return relayPaginate(this, paging);
-  };
-  (schema.statics as any) /* eslint-disable-line */.aggregateRelayPaginate =
-    function (
-      aggregate: PipelineStage[],
-      paging: any /* eslint-disable-line */
+export function relayPaginatePlugin({ maxLimit = 100 }: PluginOptions = {}) {
+  return function _relayPaginatePlugin(schema: Schema) {
+    (schema.query as any) /* eslint-disable-line */.relayPaginate = function (
+      paging: MongooseRelayPaginateInfo<any> /* eslint-disable-line */
     ) {
-      return aggregateRelayPaginate(this, aggregate, paging);
+      return relayPaginate(this, {
+        ...paging,
+        first: paging?.first ? Math.min(paging.first, maxLimit) : undefined,
+        last: paging?.last ? Math.min(paging.last, maxLimit) : undefined,
+      });
     };
+    (schema.statics as any) /* eslint-disable-line */.aggregateRelayPaginate =
+      function (
+        aggregate: PipelineStage[],
+        paging: MongooseRelayPaginateInfo<any> /* eslint-disable-line */
+      ) {
+        return aggregateRelayPaginate(this, aggregate, {
+          ...paging,
+          first: paging?.first ? Math.min(paging.first, maxLimit) : undefined,
+          last: paging?.last ? Math.min(paging.last, maxLimit) : undefined,
+        });
+      };
+  };
 }
-
-/** Registers the relayPaginatePlugin with mongoose, so the user doesn't need to. */
-plugin(relayPaginatePlugin);
