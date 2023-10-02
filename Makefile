@@ -1,5 +1,5 @@
 test_with_deps:
-	$(MAKE) -j 2 run_deps test exit
+	$(MAKE) -j 2 run_deps test docker_stop
 
 run_deps:
 	docker compose -p mongoose-relay up --abort-on-container-exit
@@ -7,5 +7,5 @@ run_deps:
 test:
 	yarn run test
 
-exit:
-	exit 1
+docker_stop:
+	docker compose -p mongoose-relay stop
