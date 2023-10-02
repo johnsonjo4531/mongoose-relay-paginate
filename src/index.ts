@@ -1,7 +1,5 @@
 import {
   QueryWithHelpers,
-  Document,
-  plugin,
   Schema,
   Model,
   Aggregate,
@@ -850,7 +848,44 @@ export function alterNodeOnResult<Result, U>(
   };
 }
 
-// declare module "mongoose" {
+/**
+ *
+ * @example
+ *
+ * // 1. Create an interface representing a document in MongoDB.
+interface User {
+  _id: mongoose.Types.ObjectId;
+  myId: number;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
+// 2. Setup various types.
+interface UserQueryHelpers {}
+
+interface UserMethods {}
+
+type MyUserMethods = UserMethods;
+
+type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
+
+type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
+RelayPaginateStatics;
+
+// 3. Create a Schema corresponding to the document interface.
+const schema = new Schema<User, UserModel, MyUserMethods>({
+  myId: Number,
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  avatar: String,
+});
+
+// 4. Create your Model.
+const UserModel = model<User, UserModel>("User", schema);
+ *
+ * @public
+ */
 export interface RelayPaginateQueryHelper {
   /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
    * allows one to use cursor based pagination.
@@ -878,6 +913,41 @@ export interface RelayPaginateQueryHelper {
   > &
     QueryHelpers<Q>;
 }
+/**
+ * @example
+ * // 1. Create an interface representing a document in MongoDB.
+interface User {
+  _id: mongoose.Types.ObjectId;
+  myId: number;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
+// 2. Setup various types.
+interface UserQueryHelpers {}
+
+interface UserMethods {}
+
+type MyUserMethods = UserMethods;
+
+type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
+
+type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
+RelayPaginateStatics;
+
+// 3. Create a Schema corresponding to the document interface.
+const schema = new Schema<User, UserModel, MyUserMethods>({
+  myId: Number,
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  avatar: String,
+});
+
+// 4. Create your Model.
+const UserModel = model<User, UserModel>("User", schema);
+ * @public
+ */
 export interface RelayPaginateStatics {
   /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
    * allows one to use cursor based pagination.
@@ -907,7 +977,9 @@ export interface RelayPaginateStatics {
 }
 // }
 
-/** Options for the relayPaginatePlugin */
+/** Options for the relayPaginatePlugin
+ * @public
+ */
 export interface PluginOptions {
   /** the maximum allowed limit for any query,
    * so that the client can't request over this
