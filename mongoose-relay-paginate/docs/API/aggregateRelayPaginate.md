@@ -2,19 +2,14 @@
 
 ### released in v2.0.0
 
-You'll need to import this package at the top of your entry file:
+After following the [intro](../intro.md).
 
-```ts
-import "mongoose-relay-paginate";
-```
-
-Then you can use `.aggregateRelayPaginate()` off of any mongoose Model.
+You can then use `.aggregateRelayPaginate()` off of any of the model's you setup.
 
 ```ts
 const result = await UserModel.aggregateRelayPaginate(
   [{ $sort: { _id: -1 } }],
   {
-    cusorKeys: ["_id"],
     last: 1,
     before: result.pageInfo.endCursor,
   }
@@ -75,7 +70,9 @@ So if your sort was by `{ name: 1 }` the following would be good and bad example
     name: "Bill"
   }
 };
-// still good after cursor since it includes name (though the email is unneccessary, it is both ignored and completely fine to send in.)
+// still good after cursor since it includes name (though
+// the email is unneccessary, it is both ignored and
+// completely fine to send in.)
 {
   after: {
     name: "Jill",
@@ -83,14 +80,17 @@ So if your sort was by `{ name: 1 }` the following would be good and bad example
   }
 };
 
-// Bad example of an after cursor does not include a name... which is the field(s) to sort by.
+// Bad example of an after cursor does not include a name...
+// which is the field(s) to sort by.
 {
   after: {
     email: "bill@example.com"
   }
 };
 
-// Good example of an after cursor as it again includes the name. Again it also ignores the email and avatar fields' as they aren't part of the sort.
+// Good example of an after cursor as it again includes the name.
+// Again it also ignores the email and avatar fields' as
+// they aren't part of the sort.
 {
   after: {
     name: "Bill",
@@ -99,7 +99,12 @@ So if your sort was by `{ name: 1 }` the following would be good and bad example
   }
 };
 
-// Good example of an after cursor as it again includes the name. Notice how this time the after cursor is a mixture of both Bill and Jill's information, but since the email is ignored Bill's record can still be found since it is only his information in the name field. Again it also ignores the email and avatar fields' as they aren't part of the sort.
+// Good example of an after cursor as it again includes the name.
+// Notice how this time the after cursor is a mixture of
+// both Bill and Jill's information, but since the email is
+// ignored Bill's record can still be found since it is only
+// his information in the name field. Again it also ignores
+// the email and avatar fields' as they aren't part of the sort.
 {
   after: {
     name: "Bill",

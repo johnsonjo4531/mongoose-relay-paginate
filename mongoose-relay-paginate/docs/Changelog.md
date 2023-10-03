@@ -5,7 +5,7 @@
 
 v4 allowed this library to automatically register the global mongoose plugin you now have to do this yourself.
 
-After v5
+v5 and after:
 ```ts
 // 0. Register the relay paginate plugins.
 plugin(

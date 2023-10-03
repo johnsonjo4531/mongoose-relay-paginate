@@ -14,8 +14,8 @@ const FeatureList: FeatureItem[] = [
     // Svg: require("@site/static/img/undraw_docusaurus_mountain.svg").default,
     description: (
       <>
-        Just import the package and start using .relayPaginate() on your
-        mongoose queries
+        Just import the package, setup the global mongoose plugin, add types to
+        your models and start using .relayPaginate() on your mongoose queries
       </>
     ),
   },
