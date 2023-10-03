@@ -4,6 +4,7 @@ import {
   alterNodeOnResult,
   relayPaginate,
   relayPaginatePlugin,
+  aggregateRelayPaginate,
 } from "..";
 import { Schema, model, connect, Model, plugin } from "mongoose";
 import mongoose from "mongoose";
@@ -232,7 +233,16 @@ describe("relayPaginate", () => {
 
   it("should work with aggregation", async () => {
     const firstUser = await UserModel.findOne({ myId: 1 });
+
     if (!firstUser) throw new Error("No user unexpected test crash.");
+    const rresult = await aggregateRelayPaginate(
+      UserModel,
+      [{ $sort: { _id: 1 } }],
+      {
+        after: { _id: firstUser?._id },
+        first: 2,
+      }
+    );
     const result = await UserModel.aggregateRelayPaginate(
       [{ $sort: { _id: 1 } }],
       {

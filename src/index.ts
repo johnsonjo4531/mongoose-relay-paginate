@@ -33,7 +33,6 @@ type DefaultRelayQuery<T = unknown, QueryHelpers = unknown> = QueryWithHelpers<
   QueryHelpers
 >;
 
-const g = {} as any;
 /** A mock query structure for our defaultRelayQuery that can play back commands as either an aggregate or
  * a query.
  */
@@ -402,7 +401,9 @@ type QueryResult<Q extends DefaultRelayQuery> = Q extends QueryWithHelpers<
   ? QueryResult
   : never;
 
-type ModelRawDocType<M extends Model<unknown>> = M extends Model<
+type ModelRawDocType<
+  M extends Model<unknown, unknown, unknown, unknown, unknown, unknown>
+> = M extends Model<
   infer RawDocType,
   unknown,
   unknown,
@@ -561,7 +562,7 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
     // });
 
     return relayResultFromNodes(
-      Object.keys(originalSort) as any,
+      Object.keys(originalSort) as (keyof unknown)[],
       {
         count: count ?? 0,
         hasNextPage,
@@ -618,9 +619,7 @@ export function aggregateRelayPaginate<T>(
   const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
   const originalSort: PipelineStage.Sort["$sort"] = [...aggregate]
     .reverse()
-    .find((x): x is PipelineStage.Sort => !!(x as any)?.["$sort"])?.[
-    "$sort"
-  ] ?? {
+    .find((x): x is PipelineStage.Sort => "$sort" in x)?.["$sort"] ?? {
     _id: 1,
   };
   edgesToReturn(pseudoQuery, pagingInfo, {
@@ -740,7 +739,7 @@ export function aggregateRelayPaginate<T>(
       endCursor: { $last: "$nodes" },
     },
   });
-  const cursorProjection = Object.keys(originalSort as any).reduce(
+  const cursorProjection = Object.keys(originalSort).reduce(
     (cursorProjection, key) => ({ ...cursorProjection, [key]: 1 }),
     {}
   );
@@ -762,7 +761,7 @@ export function aggregateRelayPaginate<T>(
     toAggregate() {
       return nodes;
     },
-    then(resolve: () => any, reject: () => any) {
+    then(resolve, reject) {
       return nodes.then((x) => x[0]).then(resolve, reject);
     },
   };
@@ -964,7 +963,7 @@ export interface RelayPaginateStatics {
    * @param paginationInfo the information to help with the paging
    * @returns
    */
-  aggregateRelayPaginate<M extends Model<any>>(
+  aggregateRelayPaginate<M extends Model<any> /* eslint-disable-line */>(
     this: M,
     aggregate: PipelineStage[],
     paginateInfo?: Partial<MongooseRelayPaginateInfoOnModel<ModelRawDocType<M>>>
