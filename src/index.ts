@@ -197,7 +197,9 @@ type DefaultInnerRelayQuery<T = unknown> = AggregateOrQueryCommandReplayer<T>;
  *
  * @public
  */
-export type PagingCursor<DocType = unknown> = Partial<DocType>;
+export type PagingCursor<DocType = unknown> = {
+  [P in keyof DocType]?: DocType[P] | undefined | null;
+};
 
 /** Info about how to page forward and backward
  * @public
@@ -205,8 +207,8 @@ export type PagingCursor<DocType = unknown> = Partial<DocType>;
 export type PagingInfo<DocType = unknown> = {
   first?: number;
   last?: number;
-  after?: PagingCursor<DocType> | null;
-  before?: PagingCursor<DocType> | null;
+  after?: PagingCursor<DocType> | null | undefined;
+  before?: PagingCursor<DocType> | null | undefined;
 };
 
 /** This algorithm is modified from the graphql-relay-specification.
