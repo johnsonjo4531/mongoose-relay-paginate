@@ -202,12 +202,30 @@ export type PagingCursor<DocType = unknown> = {
 };
 
 /** Info about how to page forward and backward
+ *
+ *
+ * `first` and `last` are alot like limit in a typical skip and limit scheme.
+ * This is because first and last signify how many elements to return.
+ * You should never supply both `first` and `last` at the same time.
+ * You should either supply one or the other, but not both.
+ * Supplying both will lead to unpredicted behaviour.
+ *
+ * `after` and `before` are more like the typical skip in skip and limit.
+ * This is because after and before signify where the
+ * collection starts and stops searching.
+ * You may supply both the after and before, but your before cursor must be later
+ * in your collection than your after cursor otherwise you will get 0 results.
+ *
  * @public
  */
 export type PagingInfo<DocType = unknown> = {
+  /** fetch the `first` given number of records */
   first?: number;
+  /** fetch the `last` given number of records */
   last?: number;
+  /** fetch `after` the given record's cursor */
   after?: PagingCursor<DocType> | null | undefined;
+  /** fetch `before` the given record's cursor */
   before?: PagingCursor<DocType> | null | undefined;
 };
 
