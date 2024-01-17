@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkmongoose_relay_paginate=self.webpackChunkmongoose_relay_paginate||[]).push([[605],{1042:a=>{a.exports=JSON.parse('{"label":"pagination","permalink":"/mongoose-relay-paginate/blog/tags/pagination","allTagsPath":"/mongoose-relay-paginate/blog/tags","count":2}')}}]);
