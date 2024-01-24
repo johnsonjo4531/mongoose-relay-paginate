@@ -16,6 +16,7 @@ const config = {
   organizationName: "johnsonjo4531", // Usually your GitHub org/user name.
   projectName: "mongoose-relay-paginate", // Usually your repo name.
   trailingSlash: false,
+  plugins: [require.resolve('docusaurus-lunr-search')],
 
   presets: [
     [

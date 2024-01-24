@@ -31,19 +31,10 @@ interface User {
 }
 
 // 2. Setup various types.
-interface UserQueryHelpers {}
-
-interface UserMethods {}
-
-type MyUserMethods = UserMethods;
-
-type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
-
-type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
-  RelayPaginateStatics;
+type UserModel = Model<User, RelayPaginateQueryHelper> & RelayPaginateStatics;
 
 // 3. Create a Schema corresponding to the document interface.
-const schema = new Schema<User, UserModel, MyUserMethods>({
+const schema = new Schema<User, UserModel>({
   myId: Number,
   name: { type: String, required: true },
   email: { type: String, required: true },
@@ -235,18 +226,10 @@ describe("relayPaginate", () => {
     const firstUser = await UserModel.findOne({ myId: 1 });
 
     if (!firstUser) throw new Error("No user unexpected test crash.");
-    const rresult = await aggregateRelayPaginate(
-      UserModel,
-      [{ $sort: { _id: 1 } }],
-      {
-        after: { _id: firstUser?._id },
-        first: 2,
-      }
-    );
     const result = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { _id: 1 } }],
+      [{ $sort: { myId: 1 } }],
       {
-        after: { _id: firstUser._id },
+        after: { myId: firstUser.myId },
         first: 2,
       }
     );
@@ -325,18 +308,6 @@ describe("relayPaginate", () => {
     ).toMatchObject([{ name: "Jill" }, { name: "Bill" }]);
   });
 
-  it("should count documents", async () => {
-    // [Phill, Jill, Bill]
-    const result = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: -1 } }],
-      {
-        first: 1,
-      }
-    );
-
-    expect(result.pageInfo.count).toBe(3);
-  });
-
   it("should aggregate with an before, first, and last", async () => {
     // sorted as [Phill, Jill, Bill]
     // last is [Bill]
@@ -393,27 +364,36 @@ describe("relayPaginate", () => {
       [{ $sort: { name: -1 } }],
       {}
     )
-      .toAggregate<[{ count: number }]>()
+      .toNodesAggregate<[{ count: number }]>()
       .count("count")
       .then();
 
-    expect(count).toBe(1);
-  });
-
-  it("should allow slightly more complex aggregate afterwards", async () => {
-    // sorted as [Phill, Jill, Bill]
-    const result = await UserModel.aggregateRelayPaginate(
-      [{ $sort: { name: 1 } }],
-      {}
-    )
-      .toAggregate<[{ count: number }]>()
-      .unwind("$nodes")
-      .count("count");
-
-    expect(result?.[0]?.count).toBe(3);
+    expect(count).toBe(3);
   });
 
   it("should allow getting pageInfo", async () => {
+    const result2 = await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {}
+    );
+
+    const result = await await UserModel.aggregateRelayPaginate(
+      [{ $sort: { name: 1 } }],
+      {}
+    )
+      .toNodesAggregate<[{ count: number }]>()
+      .count("count");
+
+    expect(result?.[0]?.count).toBe(3);
+    expect(result2.pageInfo?.startCursor).toMatchObject({
+      name: "Bill",
+    });
+    expect(result2.pageInfo?.endCursor).toMatchObject({
+      name: "Phill",
+    });
+  });
+
+  it("should skip getting pageInfo on aggregate", async () => {
     const result2 = await UserModel.aggregateRelayPaginate(
       [{ $sort: { name: 1 } }],
       {}
@@ -423,12 +403,16 @@ describe("relayPaginate", () => {
       [{ $sort: { name: 1 } }],
       {}
     )
-      .toAggregate<[{ count: number }]>()
-      .unwind("$nodes")
+      .toNodesAggregate<[{ count: number }]>()
       .count("count");
 
     expect(result?.[0]?.count).toBe(3);
-    expect(result2.pageInfo?.count).toBe(3);
+    expect(result2.pageInfo?.startCursor).toMatchObject({
+      name: "Bill",
+    });
+    expect(result2.pageInfo?.endCursor).toMatchObject({
+      name: "Phill",
+    });
   });
 
   it("should allow getting nodes on aggregate", async () => {
@@ -481,7 +465,6 @@ describe("relayPaginate", () => {
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 0,
         hasNextPage: false,
         hasPreviousPage: false,
       },
@@ -508,7 +491,6 @@ describe("relayPaginate", () => {
       nodes,
       edges: nodes.map((x) => ({ node: x, cursor: x })),
       pageInfo: {
-        count: 3,
         hasNextPage: true,
         hasPreviousPage: true,
         startCursor: nodes[0],
@@ -536,7 +518,6 @@ describe("relayPaginate", () => {
       nodes,
       edges: nodes.map((x) => ({ node: x, cursor: x })),
       pageInfo: {
-        count: 3,
         hasNextPage: true,
         hasPreviousPage: true,
         startCursor: nodes[0],
@@ -552,20 +533,14 @@ describe("relayPaginate", () => {
         before: {
           name: "Bill",
         },
-        first: 1,
+        last: 1,
       }
     );
 
-    const nodes = [
-      {
-        name: "Jill",
-      },
-    ];
     expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 3,
         hasNextPage: true,
         hasPreviousPage: false,
       },
@@ -582,11 +557,60 @@ describe("relayPaginate", () => {
         first: 1,
       });
 
+    ["Bill", "Jill", "Phill"];
+
     expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 3,
+        hasNextPage: true,
+        hasPreviousPage: false,
+      },
+    });
+  });
+
+  it("should properly compute prevPage false with last on non-aggregate", async () => {
+    const result = await UserModel.find()
+      .sort({ name: 1 })
+      .relayPaginate({
+        before: {
+          name: "Bill",
+        },
+        last: 1,
+      });
+
+    expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
+      nodes: [],
+      edges: [],
+      pageInfo: {
+        hasNextPage: true,
+        hasPreviousPage: false,
+      },
+    });
+  });
+
+  it("should properly compute count based on filter criteria", async () => {
+    const result = await UserModel.find({
+      name: /^(B|J)/,
+    })
+      .sort({ name: 1 })
+      .relayPaginate({
+        first: 1,
+      });
+
+    const bill = {
+      name: "Bill",
+    };
+
+    expect(alterNodeOnResult(result, ({ name }) => ({ name }))).toMatchObject({
+      nodes: [bill],
+      edges: [
+        {
+          cursor: bill,
+          node: bill,
+        },
+      ],
+      pageInfo: {
         hasNextPage: true,
         hasPreviousPage: false,
       },
@@ -607,7 +631,6 @@ describe("relayPaginate", () => {
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 0,
         hasNextPage: false,
         hasPreviousPage: false,
       },
@@ -626,7 +649,6 @@ describe("relayPaginate", () => {
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 0,
         hasNextPage: false,
         hasPreviousPage: false,
       },
@@ -651,7 +673,6 @@ describe("relayPaginate", () => {
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 0,
         hasNextPage: false,
         hasPreviousPage: false,
       },
@@ -676,7 +697,6 @@ describe("relayPaginate", () => {
       nodes: [],
       edges: [],
       pageInfo: {
-        count: 2,
         hasNextPage: true,
         hasPreviousPage: true,
       },

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 
@@ -83,9 +83,6 @@ const result3 = await UserModel.find()
 console.log(result3.nodes); // Will be an array of only Phill's document.
 console.log(result3.pageInfo.hasNextPage); // Will return false, since there are no more documents to be queried.
 ```
-
-Note that the `result.pageInfo.count` will return the same value for `result1`, `result2`, and `result3` since it is a total count of all nodes that can be returned by a particular query before applying any and all .
-
 
 ## Backward Pagination through Using `last` and `before`
 

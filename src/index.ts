@@ -1,4 +1,6 @@
 import {
+  SchemaType,
+  plugin,
   QueryWithHelpers,
   Schema,
   Model,
@@ -236,15 +238,19 @@ export type PagingInfo<DocType = unknown> = {
  * {@link https://relay.dev/docs/guides/graphql-server-specification/#connections  the documentation for relay relevant to connections} (documentation is generally a bit friendlier in wording), or
  * {@link https://relay.dev/graphql/connections.htm#ApplyCursorsToEdges()  the relay connection specification} (specs are generally in more specific and esoteric terms)
  */
-const edgesToReturn = function EdgesToReturn<
-  T,
-  Cursor extends PagingCursor = PagingCursor
->(
+const edgesToReturn = function EdgesToReturn<T>(
   query: DefaultInnerRelayQuery<T>,
-  { before, after, first, last }: PagingInfo<Cursor>,
-  { originalSort }: { originalSort: QueryOptions["sort"] }
+  { before, after, first, last }: PagingInfo<T>,
+  { originalSort }: { originalSort: QueryOptions["sort"] },
+  includeBeforeAfterEdge = false
 ): DefaultInnerRelayQuery<T> {
-  const edges = applyCursorsToEdges(query, originalSort, before, after);
+  const edges = applyCursorsToEdges(
+    query,
+    originalSort,
+    before,
+    after,
+    includeBeforeAfterEdge
+  );
   // Let edges be the result of calling ApplyCursorsToEdges(allEdges, before, after).
   // If first is set:
   edges.limit(DEFAULT_LIMIT);
@@ -267,16 +273,6 @@ const edgesToReturn = function EdgesToReturn<
     }
     // If edges has length greater than than last:
     // Slice edges to be of length last by removing edges from the start of edges.
-    // _id:
-    // console.log(
-    //   JSON.stringify({ originalSort }, null, 2),
-    //   Object.fromEntries(
-    //     Object.entries(originalSort).map(([key, value]) => [
-    //       key,
-    //       typeof value === "number" ? (value >= 0 ? -1 : 1) : 1,
-    //     ])
-    //   )
-    // );
     edges.sort(
       Object.fromEntries(
         Object.entries(originalSort)
@@ -300,15 +296,22 @@ const edgesToReturn = function EdgesToReturn<
  * Every cursor can then be turned backed to an item. For more info see {@link PagingCursor}.
  *
  */
-const applyCursorsToEdges = <T, MyCursor extends PagingCursor = PagingCursor>(
+const applyCursorsToEdges = <T>(
   allEdges: DefaultInnerRelayQuery<T>,
   originalSort: QueryOptions["sort"],
-  before?: MyCursor | null | undefined,
-  after?: MyCursor | null | undefined
+  before?: PagingCursor<T> | null | undefined,
+  after?: PagingCursor<T> | null | undefined,
+  includeBeforeAfterEdge = false
 ) => {
   // Initialize edges to be allEdges.
   const edges = allEdges;
   const sortBy = originalSort;
+  const gt: keyof FilterQuery<T>[string] = includeBeforeAfterEdge
+    ? ("$gte" as const)
+    : ("$gt" as const);
+  const lt: keyof FilterQuery<T>[string] = includeBeforeAfterEdge
+    ? ("$lte" as const)
+    : ("$lt" as const);
   // If after is set:
   if (after) {
     // Let afterEdge be the edge in edges whose cursor is equal to the after argument.
@@ -317,8 +320,9 @@ const applyCursorsToEdges = <T, MyCursor extends PagingCursor = PagingCursor>(
       edges.find({
         [key]:
           !sortBy || (sortBy?.[key] as number) === 1
-            ? { $gt: value }
-            : { $lt: value },
+            ? { [gt as any]: value }
+            : { [lt as any]: value },
+        // If the elements are 0, 1, 2, 3, 4, 5 then
         // if sort is ascending: 0 (after: 0) --->, 1, 2, 3, 4, 5
         // if sort is descending: 5 (after: 5) --->, 4, 3, 2, 1, 0
       });
@@ -333,9 +337,10 @@ const applyCursorsToEdges = <T, MyCursor extends PagingCursor = PagingCursor>(
       edges.find({
         [key]:
           (!sortBy as boolean) || (sortBy?.[key] as number) === 1
-            ? { $lt: value }
-            : { $gt: value },
+            ? { [lt as any]: value }
+            : { [gt as any]: value },
       });
+      // If the elements are 0, 1, 2, 3, 4, 5 then
       // if sort is ascending: 0, 1, 2, 3, 4, <--- (before: 5) 5
       // if sort is descending: 5, 4, 3, 2, 1, <--- (before: 0) 0
     });
@@ -355,7 +360,6 @@ export interface RelayResult<Nodes extends unknown[]> {
   }[];
   nodes: Nodes;
   pageInfo: {
-    count: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
     endCursor?: PagingCursor<ElementOfArray<Nodes>> | null;
@@ -373,7 +377,6 @@ export interface TransformedRelayResult<
   }[];
   nodes: NewNodes;
   pageInfo: {
-    count: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
     endCursor?: PagingCursor<ElementOfArray<OriginalNodes>> | null;
@@ -452,6 +455,27 @@ type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
 /** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding document type. */
 type MongooseRelayPaginateInfoOnModel<D> = PagingInfo<D>; // | UnwrapArray<D> extends Document<unknown, unknown, infer G> ? G : never
 
+type IndexedField = SchemaType & {
+  index: boolean;
+};
+
+function paginator<Q extends DefaultRelayQuery>(
+  { ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {},
+  sort: any,
+  includeBeforeAfterEdge = false
+) {
+  const pseudoQuery = new AggregateOrQueryCommandReplayer();
+  edgesToReturn(
+    pseudoQuery,
+    pagingInfo,
+    {
+      originalSort: sort,
+    },
+    includeBeforeAfterEdge
+  );
+  return pseudoQuery;
+}
+
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
  * allows one to use cursor based pagination.
  *
@@ -476,141 +500,220 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
   QueryHelpers<Q>,
   QueryRawDocType<Q>
 > {
-  const pseudoQuery = new AggregateOrQueryCommandReplayer();
-  const originalSort = query.getOptions().sort ?? {
+  const sort = query.getOptions().sort ?? {
     _id: 1,
   };
-  edgesToReturn(pseudoQuery, pagingInfo, {
-    originalSort,
-  });
-  const finalQuery = pseudoQuery.toQuery(query.clone());
-  return finalQuery.transform(async (_nodes) => {
-    const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
-    const beforeAfterCount =
-      (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
-    const [{ count, hasNextPage, hasPreviousPage }] = await query.model
-      .aggregate<{
-        count: number;
-        hasNextPage: boolean;
-        hasPreviousPage: boolean;
-      }>([{ $match: query.getFilter() }])
-      .facet({
-        count: [{ $count: "count" }],
-        ends: [
-          {
-            $sort: originalSort,
-          },
-          {
-            $group: {
-              _id: null,
-              first: { $first: "$$ROOT" },
-              last: { $last: "$$ROOT" },
-            },
-          },
-        ],
-      })
-      .unwind({ path: "$count", preserveNullAndEmptyArrays: true })
-      .unwind({ path: "$ends", preserveNullAndEmptyArrays: true })
-      .replaceRoot({
-        count: { $cond: ["$count.count", "$count.count", 0] },
-        hasNextPage: {
-          $cond: [
-            {
-              $or: [
-                {
-                  $and: [
-                    { $eq: [!!pagingInfo.before, true] },
-                    { $gte: ["$count", beforeAfterCount] },
-                  ],
-                },
-                {
-                  $and: [
-                    { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
-                    { $gt: [nodes.length, 0] },
-                    {
-                      $cond: [
-                        {
-                          $in: ["$ends.last._id", nodes.map((x) => x._id)],
-                        },
-                        false,
-                        true,
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-            true,
-            false,
-          ],
-        },
-        hasPreviousPage: {
-          $cond: [
-            {
-              $or: [
-                {
-                  $and: [
-                    { $eq: [!!pagingInfo.after, true] },
-                    { $gte: ["$count", beforeAfterCount] },
-                  ],
-                },
-                {
-                  $and: [
-                    { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
-                    { $gt: [nodes.length, 0] },
-                    {
-                      $cond: [
-                        {
-                          $in: ["$ends.first._id", nodes.map((x) => x._id)],
-                        },
-                        false,
-                        true,
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-            true,
-            false,
-          ],
-        },
-      });
-    //     startCursor: { $first: "$nodes" },
-    //     endCursor: { $last: "$nodes" },
-    //   },
-    // });
 
-    return relayResultFromNodes(
-      Object.keys(originalSort) as (keyof unknown)[],
-      {
-        count: count ?? 0,
-        hasNextPage,
-        // Boolean(pagingInfo.before) ||
-        // (nodes.length > 0 &&
-        //   ends?.last?._id instanceof Types.ObjectId &&
-        //   !(nodes as { _id: Types.ObjectId }[]).some(
-        //     (node) => node._id?.equals(ends.last?._id ?? "") ?? false
-        //   )),
-        hasPreviousPage,
-        // :
-        // Boolean(pagingInfo.after) ||
-        // (nodes.length > 0 &&
-        //   ends?.first?._id instanceof Types.ObjectId &&
-        //   !(nodes as { _id: Types.ObjectId }[]).some(
-        //     (node: { _id: undefined | Types.ObjectId }) =>
-        //       node._id?.equals(ends.first?._id ?? "") ?? false
-        //   )),
-      },
-      nodes as MongooseRelayDocument<Q>[]
-    );
-  }) as QueryWithHelpers<
+  return paginator(
+    {
+      ...pagingInfo,
+      // first:
+      //   typeof pagingInfo.first === "number" ? pagingInfo.first + 1 : undefined,
+      // last:
+      //   typeof pagingInfo.last === "number" ? pagingInfo.last + 1 : undefined,
+    },
+    sort
+  )
+    .toQuery(query.clone())
+    .transform(async (_nodes) => {
+      const { sortKeys, hasNextPage, hasPreviousPage } = await getPageInfo<Q>(
+        sort,
+        pagingInfo,
+        query
+      );
+
+      const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
+      return relayResultFromNodes(
+        sortKeys,
+        {
+          hasNextPage,
+          hasPreviousPage,
+        },
+        nodes
+      );
+    }) as QueryWithHelpers<
     Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
     QueryDocType<Q>,
     QueryHelpers<Q>,
     QueryRawDocType<Q>
   > &
     QueryHelpers<Q>;
+}
+
+async function getPageInfo<Q extends DefaultRelayQuery>(
+  sort: any,
+  pagingInfo: {
+    /** fetch the `first` given number of records */
+    first?: number | undefined;
+    /** fetch the `last` given number of records */
+    last?: number | undefined;
+    /** fetch `after` the given record's cursor */
+    after?:
+      | PagingCursor<
+          Q extends import("mongoose").Query<
+            unknown,
+            unknown,
+            unknown,
+            infer DocType,
+            "find"
+          >
+            ? DocType
+            : never
+        >
+      | null
+      | undefined;
+    /** fetch `before` the given record's cursor */
+    before?:
+      | PagingCursor<
+          Q extends import("mongoose").Query<
+            unknown,
+            unknown,
+            unknown,
+            infer DocType,
+            "find"
+          >
+            ? DocType
+            : never
+        >
+      | null
+      | undefined;
+  },
+  query: Q
+) {
+  const sortKeys = Object.keys(sort) as (keyof unknown)[];
+
+  const pseudoQuery = new AggregateOrQueryCommandReplayer();
+  const edges = applyCursorsToEdges(
+    pseudoQuery,
+    sort,
+    pagingInfo.before,
+    pagingInfo.after
+  ).toQuery(query.clone());
+  // const count = await query.model
+  //   .find(query.getFilter())
+  //   .estimatedDocumentCount();
+
+  const edgesLength = await edges
+    .limit(Math.max(pagingInfo?.first ?? 0, pagingInfo?.last ?? 0) + 1)
+    .countDocuments();
+  ///
+  const hasNextPage = await (async function () {
+    let returnValue = false;
+    if (typeof pagingInfo.first === "number") {
+      returnValue = edgesLength > pagingInfo.first;
+    }
+    if (!returnValue && pagingInfo.before) {
+      returnValue =
+        (
+          await paginator(
+            {
+              first: 1,
+              after: pagingInfo.before,
+            },
+            sort,
+            true
+          ).toQuery(query.clone())
+        ).length > 0;
+    }
+    return returnValue;
+  })();
+
+  const hasPreviousPage = await (async function () {
+    let returnValue = false;
+    if (typeof pagingInfo.last === "number") {
+      returnValue = edgesLength > pagingInfo.last;
+    }
+    if (!returnValue && pagingInfo.after) {
+      returnValue =
+        (
+          await paginator(
+            {
+              first: 1,
+              before: pagingInfo.after,
+            },
+            sort,
+            true
+          ).toQuery(query.clone())
+        ).length > 0;
+    }
+    return returnValue;
+  })();
+  return { sortKeys, hasNextPage, hasPreviousPage };
+}
+
+async function getAggregatePageInfo<T>(
+  sort: any,
+  pagingInfo: {
+    /** fetch the `first` given number of records */
+    first?: number | undefined;
+    /** fetch the `last` given number of records */
+    last?: number | undefined;
+    /** fetch `after` the given record's cursor */
+    after?: PagingCursor<T> | null | undefined;
+    /** fetch `before` the given record's cursor */
+    before?: PagingCursor<T> | null | undefined;
+  },
+  model: Model<T>,
+  userAggregates: PipelineStage[]
+) {
+  const sortKeys = Object.keys(sort) as (keyof unknown)[];
+
+  const pseudoQuery = new AggregateOrQueryCommandReplayer();
+  const edges = applyCursorsToEdges(
+    pseudoQuery,
+    sort,
+    pagingInfo.before,
+    pagingInfo.after
+  ).toAggregate(model as any, userAggregates);
+
+  const edgesLength = (
+    (await edges
+      .limit(Math.max(pagingInfo.first ?? 0, pagingInfo.last ?? 0) + 1)
+      .count("count")) as unknown as [{ count: number }]
+  )?.[0]?.count;
+  ///
+  const hasNextPage = await (async function () {
+    let returnValue = false;
+    if (typeof pagingInfo.first === "number") {
+      returnValue = edgesLength > pagingInfo.first;
+    }
+    if (!returnValue && pagingInfo.before) {
+      returnValue =
+        (
+          await paginator(
+            {
+              first: 1,
+              after: pagingInfo.before,
+            },
+            sort,
+            true
+          ).toAggregate(model as any, userAggregates)
+        ).length > 0;
+    }
+    return returnValue;
+  })();
+
+  const hasPreviousPage = await (async function () {
+    let returnValue = false;
+    if (typeof pagingInfo.last === "number") {
+      returnValue = edgesLength > pagingInfo.last;
+    }
+    if (!returnValue && pagingInfo.after) {
+      returnValue =
+        (
+          await paginator(
+            {
+              first: 1,
+              before: pagingInfo.after,
+            },
+            sort,
+            true
+          ).toAggregate(model as any, userAggregates)
+        ).length > 0;
+    }
+    return returnValue;
+  })();
+  return { sortKeys, hasNextPage, hasPreviousPage };
 }
 
 /** This is an implementation of the relay pagination algorithm for mongoose. This algorithm and pagination format
@@ -633,7 +736,7 @@ export function aggregateRelayPaginate<T>(
   aggregate: PipelineStage[],
   { ...pagingInfo }: MongooseRelayPaginateInfoOnModel<T> = {}
 ): {
-  toAggregate: () => Aggregate<[RelayResult<T[]>]>;
+  toNodesAggregate: <AggregateResult = [T[]]>() => Aggregate<AggregateResult>;
   then: Aggregate<RelayResult<T[]>>["then"];
 } {
   const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
@@ -645,159 +748,33 @@ export function aggregateRelayPaginate<T>(
   edgesToReturn(pseudoQuery, pagingInfo, {
     originalSort,
   });
-  const nodes: Aggregate<[RelayResult<T[]>]> =
-    pseudoQuery.toUserDefinedAggregate(
-      model,
-      aggregate
-    ) as unknown as Aggregate<[RelayResult<T[]>]>;
-  // We have to take the commands and put them in a facet?
-  // I'd rather not have them in a facet cause you can't put facets within facets, and other
-  // various pipelines also don't work.
-  //
-  nodes.facet({
-    count: [{ $count: "count" }],
-    nodes: [
-      ...pseudoQuery.currentCommandsAsFacetPipelineStages(),
-      {
-        $sort: originalSort,
-      },
-    ],
-    ends: [
-      {
-        $sort: originalSort,
-      },
-      {
-        $group: {
-          _id: null,
-          first: { $first: "$$ROOT" },
-          last: { $last: "$$ROOT" },
-        },
-      },
-    ],
-  });
-  nodes.unwind({ path: "$count", preserveNullAndEmptyArrays: true });
-  nodes.unwind({ path: "$ends", preserveNullAndEmptyArrays: true });
-  const beforeAfterCount =
-    (pagingInfo.before ? 1 : 0) + (pagingInfo.after ? 1 : 0);
-  nodes.replaceRoot({
-    nodes: "$nodes",
-    edges: {
-      $map: {
-        input: "$nodes",
-        as: "node",
-        in: {
-          node: "$$node",
-          cursor: "$$node",
-        },
-      },
-    },
-    pageInfo: {
-      count: { $cond: ["$count.count", "$count.count", 0] },
-      hasNextPage: {
-        $cond: [
-          {
-            $or: [
-              {
-                $and: [
-                  { $eq: [!!pagingInfo.before, true] },
-                  { $gte: ["$count", beforeAfterCount] },
-                ],
-              },
-              {
-                $and: [
-                  { $eq: [{ $type: "$ends.last._id" }, "objectId"] },
-                  { $gt: [{ $size: "$nodes" }, 0] },
-                  {
-                    $cond: [
-                      {
-                        $in: ["$ends.last._id", "$nodes._id"],
-                      },
-                      false,
-                      true,
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          true,
-          false,
-        ],
-      },
-      hasPreviousPage: {
-        $cond: [
-          {
-            $or: [
-              {
-                $and: [
-                  { $eq: [!!pagingInfo.after, true] },
-                  { $gte: ["$count", beforeAfterCount] },
-                ],
-              },
-              {
-                $and: [
-                  { $eq: [{ $type: "$ends.first._id" }, "objectId"] },
-                  { $gt: [{ $size: "$nodes" }, 0] },
-                  {
-                    $cond: [
-                      {
-                        $in: ["$ends.first._id", "$nodes._id"],
-                      },
-                      false,
-                      true,
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          true,
-          false,
-        ],
-      },
-      startCursor: { $first: "$nodes" },
-      endCursor: { $last: "$nodes" },
-    },
-  });
-  const cursorProjection = Object.keys(originalSort).reduce(
-    (cursorProjection, key) => ({ ...cursorProjection, [key]: 1 }),
-    {}
-  );
-  nodes.project({
-    nodes: 1,
-    edges: {
-      node: 1,
-      cursor: cursorProjection,
-    },
-    pageInfo: {
-      count: 1,
-      hasNextPage: 1,
-      hasPreviousPage: 1,
-      startCursor: cursorProjection,
-      endCursor: cursorProjection,
-    },
-  });
+  const nodes: Aggregate<T[]> = pseudoQuery.toAggregate(
+    model,
+    aggregate
+  ) as unknown as Aggregate<T[]>;
+
   return {
-    toAggregate() {
-      return nodes;
+    toNodesAggregate<AggregateResult = T[]>() {
+      return nodes as unknown as Aggregate<AggregateResult>;
     },
     then(resolve, reject) {
-      return nodes.then((x) => x[0]).then(resolve, reject);
+      return getAggregatePageInfo(originalSort, pagingInfo, model, aggregate)
+        .then(async ({ sortKeys, ...pageInfo }) => {
+          const _nodes = await nodes;
+          return relayResultFromNodes(sortKeys, pageInfo, _nodes);
+        })
+        .then(resolve, reject);
     },
   };
 }
 
-export function toCursorFromKeys<
-  Result extends MongooseRelayDocument<DefaultRelayQuery>
->(
-  keys: (keyof NonNullable<
-    MongooseRelayPaginateInfoOnModel<Result>["after"]
-  >)[],
-  doc: Result
+export function toCursorFromKeys<Node>(
+  keys: (keyof NonNullable<MongooseRelayPaginateInfoOnModel<Node>["after"]>)[],
+  doc: Node
 ) {
   return keys.reduce(
     (obj, key) => ({ ...obj, [key]: doc[key] }),
-    {} as Partial<Result>
+    {} as Partial<Node>
   );
 }
 
@@ -814,22 +791,16 @@ export function toCursorFromKeys<
  * @returns A {@link RelayResult}
  * @public
  */
-export function relayResultFromNodes<
-  Result extends MongooseRelayDocument<DefaultRelayQuery>
->(
+export function relayResultFromNodes<Node>(
   cursorKeys: (keyof NonNullable<
-    MongooseRelayPaginateInfoOnModel<Result>["after"]
+    MongooseRelayPaginateInfoOnModel<Node>["after"]
   >)[],
   {
-    count,
     hasNextPage,
     hasPreviousPage,
-  }: Pick<
-    RelayResult<Result[]>["pageInfo"],
-    "count" | "hasNextPage" | "hasPreviousPage"
-  >,
-  nodes: Result[]
-): RelayResult<Result[]> {
+  }: Pick<RelayResult<Node[]>["pageInfo"], "hasNextPage" | "hasPreviousPage">,
+  nodes: Node[]
+): RelayResult<Node[]> {
   return {
     edges: nodes.map((node) => ({
       node: node,
@@ -837,7 +808,6 @@ export function relayResultFromNodes<
     })),
     nodes,
     pageInfo: {
-      count,
       hasNextPage,
       hasPreviousPage,
       endCursor: nodes[nodes.length - 1]
@@ -881,19 +851,10 @@ interface User {
 }
 
 // 2. Setup various types.
-interface UserQueryHelpers {}
-
-interface UserMethods {}
-
-type MyUserMethods = UserMethods;
-
-type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
-
-type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
-RelayPaginateStatics;
+type UserModel = Model<User, RelayPaginateQueryHelper> & RelayPaginateStatics;
 
 // 3. Create a Schema corresponding to the document interface.
-const schema = new Schema<User, UserModel, MyUserMethods>({
+const schema = new Schema<User, UserModel>({
   myId: Number,
   name: { type: String, required: true },
   email: { type: String, required: true },
@@ -944,19 +905,10 @@ interface User {
 }
 
 // 2. Setup various types.
-interface UserQueryHelpers {}
-
-interface UserMethods {}
-
-type MyUserMethods = UserMethods;
-
-type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
-
-type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
-RelayPaginateStatics;
+type UserModel = Model<User, RelayPaginateQueryHelper> & RelayPaginateStatics;
 
 // 3. Create a Schema corresponding to the document interface.
-const schema = new Schema<User, UserModel, MyUserMethods>({
+const schema = new Schema<User, UserModel>({
   myId: Number,
   name: { type: String, required: true },
   email: { type: String, required: true },
@@ -988,9 +940,9 @@ export interface RelayPaginateStatics {
     aggregate: PipelineStage[],
     paginateInfo?: Partial<MongooseRelayPaginateInfoOnModel<ModelRawDocType<M>>>
   ): {
-    toAggregate: <D>() => Aggregate<
-      unknown extends D ? [RelayResult<ModelRawDocType<M>[]>] : D
-    >;
+    toNodesAggregate: <
+      AggregateResult = [ModelRawDocType<M>[]]
+    >() => Aggregate<AggregateResult>;
     then: Aggregate<RelayResult<ModelRawDocType<M>[]>>["then"];
   };
 }

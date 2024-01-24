@@ -6,23 +6,13 @@
 
 Your instance of MongoDB should be running version 4.4 or later. Your version of mongoose should be 7.5.1 or later
 
-## Migration
-
-### v4.0.0 to v5.0.0
-
-#### Registering the plugin
-
-v4 allowed this library to
-
-#### Sending in types
-
-Version 4 of this library tried to provide types for you out of the box, but version 5 now requires you to type your own models. This will make maintenance of this library less likely to break between many different changes to TypeScript types i.e. v5 will provide more future proof types.
-
-For v5.0.0 to get Mongoose to return the right types
-
 ## Docs
 
 View the [docs](https://johnsonjo4531.github.io/mongoose-relay-paginate/)
+
+## Changelog
+
+The [changelog is available here.](https://johnsonjo4531.github.io/mongoose-relay-paginate/docs/Changelog)
 
 ## What
 
@@ -73,7 +63,7 @@ The pagination process with a cursor is quite a bit more involved to implement f
  *
  * `first` and `last` are alot like limit in a typical skip and limit scheme.
  * This is because first and last signify how many elements to return.
-than * You should never supply both `first` and `last` at the same time.
+ * You should never supply both `first` and `last` at the same time.
  * You should either supply one or the other, but not both.
  * Supplying both will lead to unpredicted behaviour.
  *
@@ -122,7 +112,6 @@ export interface RelayResult<Nodes extends unknown[]> {
   }[];
   nodes: Nodes;
   pageInfo: {
-    count: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
     endCursor?: PagingCursor<ElementOfArray<Nodes>> | null;
@@ -164,8 +153,8 @@ Then you need to register the plugin sometime before you create your models see 
 ) for help:
 
 ```ts
-import {plugin, Model, model, Schema } from "mongoose";
-import {relayPaginatePlugin} from "mongoose-relay-paginate";
+import { plugin, Model, model, Schema } from "mongoose";
+import { relayPaginatePlugin, RelayPaginateQueryHelper, RelayPaginateStatics  } from "mongoose-relay-paginate";
 
 // 0. Register the relay paginate plugins.
 plugin(
@@ -185,19 +174,10 @@ interface User {
 }
 
 // 2. Setup various types.
-interface UserQueryHelpers {}
-
-interface UserMethods {}
-
-type MyUserMethods = UserMethods;
-
-type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
-
-type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
-  RelayPaginateStatics;
+type UserModel = Model<User, RelayPaginateQueryHelper> & RelayPaginateStatics;
 
 // 3. Create a Schema corresponding to the document interface.
-const schema = new Schema<User, UserModel, MyUserMethods>({
+const schema = new Schema<User, UserModel>({
   myId: Number,
   name: { type: String, required: true },
   email: { type: String, required: true },
@@ -249,7 +229,6 @@ type result = {
     }
   },
   pageInfo: {
-    count: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
     endCursor: {

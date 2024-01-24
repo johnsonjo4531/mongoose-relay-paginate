@@ -1,9 +1,13 @@
+---
+sidebar_position: 1
+---
+
 # relayPaginate()
 
 
-After following the [intro](../intro.md).
+After familiarizing yourself with the [intro](../intro.md) and [installing](../installation.md).
 
-You can then use `.relayPaginate()` off of any mongoose query you setup following the intro.
+You can then use `.relayPaginate()` off of any mongoose query you setup following the install process.
 
 ```ts
 const result = await UserModel.find()
@@ -55,7 +59,7 @@ console.log(result.nodes); // Will be an array of Jill and then Phill's object
 
 Generally you would want the cursor (represented by your before and after options) to match whatever you are sorting by; a good default if you don't know what you are sorting by is to use the _id field as your cursor as it is the default sort field in mongodb, though this default is unnecessary in newer versions of the library.
 
-Generally this is unnecessary to think about as both relayPaginates (aggregate and non-aggregate) should return to you start cursors and end cursors to paginate by in your before and after.
+Generally this is unnecessary to think about as both relayPaginates (the aggregate and non-aggregate) should return to you start cursors and end cursors to paginate by in your before and after.
 
 The before and after options, if provided, have to fit atleast the shape of the sort in order to return the proper output.
 

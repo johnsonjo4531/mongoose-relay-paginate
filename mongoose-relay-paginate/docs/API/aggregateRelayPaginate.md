@@ -1,8 +1,12 @@
+---
+sidebar_position: 2
+---
+
 # aggregateRelayPaginate()
 
 ### released in v2.0.0
 
-After following the [intro](../intro.md).
+After familiarizing yourself with the [intro](../intro.md) and [installing](../installation.md).
 
 You can then use `.aggregateRelayPaginate()` off of any of the model's you setup.
 

@@ -1,4 +1,4 @@
-# Serverless Example
+# Script Example
 
 ```js
 import {
@@ -33,16 +33,7 @@ interface User {
 }
 
 // 2. Setup various types.
-interface UserQueryHelpers {}
-
-interface UserMethods {}
-
-type MyUserMethods = UserMethods;
-
-type MyQueryHelpers = UserQueryHelpers & RelayPaginateQueryHelper;
-
-type UserModel = Model<User, MyQueryHelpers, MyUserMethods> &
-RelayPaginateStatics;
+type UserModel = Model<User, RelayPaginateQueryHelper> & RelayPaginateStatics;
 
 // 3. Create a Schema corresponding to the document interface.
 const schema = new Schema<User, UserModel, MyUserMethods>({
