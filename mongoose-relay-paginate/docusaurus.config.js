@@ -16,7 +16,18 @@ const config = {
   organizationName: "johnsonjo4531", // Usually your GitHub org/user name.
   projectName: "mongoose-relay-paginate", // Usually your repo name.
   trailingSlash: false,
-  plugins: [require.resolve('docusaurus-lunr-search')],
+  plugins: [
+    require.resolve('docusaurus-lunr-search'),
+    [
+      'docusaurus-plugin-typedoc',
+
+      // Plugin / TypeDoc options
+      {
+        entryPoints: ['../src/index.ts'],
+        tsconfig: '../tsconfig.json',
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -58,7 +69,7 @@ const config = {
             type: "doc",
             docId: "intro",
             position: "left",
-            label: "Tutorial",
+            label: "Docs",
           },
           { to: "/blog", label: "Blog", position: "left" },
           {
