@@ -1,6 +1,4 @@
 import {
-  SchemaType,
-  plugin,
   QueryWithHelpers,
   Schema,
   Model,
@@ -306,10 +304,10 @@ const applyCursorsToEdges = <T>(
   // Initialize edges to be allEdges.
   const edges = allEdges;
   const sortBy = originalSort;
-  const gt: keyof FilterQuery<T>[string] = includeBeforeAfterEdge
+  const gt: "$gte" | "$gt" = includeBeforeAfterEdge
     ? ("$gte" as const)
     : ("$gt" as const);
-  const lt: keyof FilterQuery<T>[string] = includeBeforeAfterEdge
+  const lt: "$lte" | "$lt" = includeBeforeAfterEdge
     ? ("$lte" as const)
     : ("$lt" as const);
   // If after is set:
@@ -320,12 +318,12 @@ const applyCursorsToEdges = <T>(
       edges.find({
         [key]:
           !sortBy || (sortBy?.[key] as number) === 1
-            ? { [gt as any]: value }
-            : { [lt as any]: value },
+            ? { [gt]: value }
+            : { [lt]: value },
         // If the elements are 0, 1, 2, 3, 4, 5 then
         // if sort is ascending: 0 (after: 0) --->, 1, 2, 3, 4, 5
         // if sort is descending: 5 (after: 5) --->, 4, 3, 2, 1, 0
-      });
+      } as FindArgs<T>[0]);
     });
   }
   // If before is set:
@@ -337,9 +335,9 @@ const applyCursorsToEdges = <T>(
       edges.find({
         [key]:
           (!sortBy as boolean) || (sortBy?.[key] as number) === 1
-            ? { [lt as any]: value }
-            : { [gt as any]: value },
-      });
+            ? { [lt]: value }
+            : { [gt]: value },
+      } as FindArgs<T>[0]);
       // If the elements are 0, 1, 2, 3, 4, 5 then
       // if sort is ascending: 0, 1, 2, 3, 4, <--- (before: 5) 5
       // if sort is descending: 5, 4, 3, 2, 1, <--- (before: 0) 0
@@ -455,16 +453,12 @@ type MongooseRelayPaginateInfo<Q extends DefaultRelayQuery> =
 /** A helper generic type which when given a {@link Model} and {@link PagingCursor} construct its corresponding document type. */
 type MongooseRelayPaginateInfoOnModel<D> = PagingInfo<D>; // | UnwrapArray<D> extends Document<unknown, unknown, infer G> ? G : never
 
-type IndexedField = SchemaType & {
-  index: boolean;
-};
-
-function paginator<Q extends DefaultRelayQuery>(
-  { ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {},
-  sort: any,
+function paginator<T>(
+  { ...pagingInfo }: MongooseRelayPaginateInfo<DefaultRelayQuery<T>> = {},
+  sort: Record<string, unknown>,
   includeBeforeAfterEdge = false
 ) {
-  const pseudoQuery = new AggregateOrQueryCommandReplayer();
+  const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
   edgesToReturn(
     pseudoQuery,
     pagingInfo,
@@ -491,20 +485,20 @@ function paginator<Q extends DefaultRelayQuery>(
  * @param paginationInfo the information to help with the paging
  * @returns
  */
-export function relayPaginate<Q extends DefaultRelayQuery>(
-  query: Q,
-  { ...pagingInfo }: MongooseRelayPaginateInfo<Q> = {}
+export function relayPaginate<T>(
+  query: DefaultRelayQuery<T>,
+  { ...pagingInfo }: MongooseRelayPaginateInfo<DefaultRelayQuery<T>> = {}
 ): QueryWithHelpers<
-  Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
-  QueryDocType<Q>,
-  QueryHelpers<Q>,
-  QueryRawDocType<Q>
+  Promise<RelayResult<MongooseRelayDocument<DefaultRelayQuery<T>>[]>>,
+  QueryDocType<DefaultRelayQuery<T>>,
+  QueryHelpers<DefaultRelayQuery<T>>,
+  QueryRawDocType<DefaultRelayQuery<T>>
 > {
   const sort = query.getOptions().sort ?? {
     _id: 1,
   };
 
-  return paginator(
+  return paginator<T>(
     {
       ...pagingInfo,
       // first:
@@ -516,13 +510,15 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
   )
     .toQuery(query.clone())
     .transform(async (_nodes) => {
-      const { sortKeys, hasNextPage, hasPreviousPage } = await getPageInfo<Q>(
+      const { sortKeys, hasNextPage, hasPreviousPage } = await getPageInfo<T>(
         sort,
         pagingInfo,
         query
       );
 
-      const nodes = _nodes as unknown as MongooseRelayDocument<Q>[];
+      const nodes = _nodes as unknown as MongooseRelayDocument<
+        DefaultRelayQuery<T>
+      >[];
       return relayResultFromNodes(
         sortKeys,
         {
@@ -532,53 +528,27 @@ export function relayPaginate<Q extends DefaultRelayQuery>(
         nodes
       );
     }) as QueryWithHelpers<
-    Promise<RelayResult<MongooseRelayDocument<Q>[]>>,
-    QueryDocType<Q>,
-    QueryHelpers<Q>,
-    QueryRawDocType<Q>
+    Promise<RelayResult<MongooseRelayDocument<DefaultRelayQuery<T>>[]>>,
+    QueryDocType<DefaultRelayQuery<T>>,
+    QueryHelpers<DefaultRelayQuery<T>>,
+    QueryRawDocType<DefaultRelayQuery<T>>
   > &
-    QueryHelpers<Q>;
+    QueryHelpers<DefaultRelayQuery<T>>;
 }
 
-async function getPageInfo<Q extends DefaultRelayQuery>(
-  sort: any,
+async function getPageInfo<T>(
+  sort: Record<string, unknown>,
   pagingInfo: {
     /** fetch the `first` given number of records */
     first?: number | undefined;
     /** fetch the `last` given number of records */
     last?: number | undefined;
     /** fetch `after` the given record's cursor */
-    after?:
-      | PagingCursor<
-          Q extends import("mongoose").Query<
-            unknown,
-            unknown,
-            unknown,
-            infer DocType,
-            "find"
-          >
-            ? DocType
-            : never
-        >
-      | null
-      | undefined;
+    after?: PagingCursor<T> | null | undefined;
     /** fetch `before` the given record's cursor */
-    before?:
-      | PagingCursor<
-          Q extends import("mongoose").Query<
-            unknown,
-            unknown,
-            unknown,
-            infer DocType,
-            "find"
-          >
-            ? DocType
-            : never
-        >
-      | null
-      | undefined;
+    before?: PagingCursor<T> | null | undefined;
   },
-  query: Q
+  query: DefaultRelayQuery<T>
 ) {
   const sortKeys = Object.keys(sort) as (keyof unknown)[];
 
@@ -605,7 +575,7 @@ async function getPageInfo<Q extends DefaultRelayQuery>(
     if (!returnValue && pagingInfo.before) {
       returnValue =
         (
-          await paginator(
+          await paginator<T>(
             {
               first: 1,
               after: pagingInfo.before,
@@ -642,7 +612,7 @@ async function getPageInfo<Q extends DefaultRelayQuery>(
 }
 
 async function getAggregatePageInfo<T>(
-  sort: any,
+  sort: Record<string, unknown>,
   pagingInfo: {
     /** fetch the `first` given number of records */
     first?: number | undefined;
@@ -658,13 +628,13 @@ async function getAggregatePageInfo<T>(
 ) {
   const sortKeys = Object.keys(sort) as (keyof unknown)[];
 
-  const pseudoQuery = new AggregateOrQueryCommandReplayer();
-  const edges = applyCursorsToEdges(
+  const pseudoQuery = new AggregateOrQueryCommandReplayer<T>();
+  const edges = applyCursorsToEdges<T>(
     pseudoQuery,
     sort,
     pagingInfo.before,
     pagingInfo.after
-  ).toAggregate(model as any, userAggregates);
+  ).toAggregate(model, userAggregates);
 
   const edgesLength = (
     (await edges
@@ -680,14 +650,14 @@ async function getAggregatePageInfo<T>(
     if (!returnValue && pagingInfo.before) {
       returnValue =
         (
-          await paginator(
+          await paginator<T>(
             {
               first: 1,
               after: pagingInfo.before,
             },
             sort,
             true
-          ).toAggregate(model as any, userAggregates)
+          ).toAggregate(model, userAggregates)
         ).length > 0;
     }
     return returnValue;
@@ -701,14 +671,14 @@ async function getAggregatePageInfo<T>(
     if (!returnValue && pagingInfo.after) {
       returnValue =
         (
-          await paginator(
+          await paginator<T>(
             {
               first: 1,
               before: pagingInfo.after,
             },
             sort,
             true
-          ).toAggregate(model as any, userAggregates)
+          ).toAggregate(model, userAggregates)
         ).length > 0;
     }
     return returnValue;
