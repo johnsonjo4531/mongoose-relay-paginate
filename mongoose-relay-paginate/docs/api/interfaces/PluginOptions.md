@@ -26,4 +26,4 @@ amount of items paged at a time.
 
 #### Defined in
 
-[src/index.ts:931](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L931)
+[src/index.ts:931](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L931)

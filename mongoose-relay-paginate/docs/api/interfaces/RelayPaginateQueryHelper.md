@@ -71,4 +71,4 @@ For more info on using cursor based pagination algorithms like relay see:
 
 #### Defined in
 
-[src/index.ts:855](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L855)
+[src/index.ts:855](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L855)

@@ -20,7 +20,7 @@ custom_edit_url: null
 
 #### Defined in
 
-[src/index.ts:355](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L355)
+[src/index.ts:355](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L355)
 
 ___
 
@@ -30,7 +30,7 @@ ___
 
 #### Defined in
 
-[src/index.ts:359](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L359)
+[src/index.ts:359](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L359)
 
 ___
 
@@ -49,4 +49,4 @@ ___
 
 #### Defined in
 
-[src/index.ts:360](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L360)
+[src/index.ts:360](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L360)

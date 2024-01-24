@@ -63,7 +63,7 @@ DB Object -> some transform to a cursor -> Cursor
 
 #### Defined in
 
-[src/index.ts:200](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L200)
+[src/index.ts:200](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L200)
 
 ___
 
@@ -102,7 +102,7 @@ in your collection than your after cursor otherwise you will get 0 results.
 
 #### Defined in
 
-[src/index.ts:221](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L221)
+[src/index.ts:221](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L221)
 
 ## Functions
 
@@ -146,7 +146,7 @@ For more info on using cursor based pagination algorithms like relay see:
 
 #### Defined in
 
-[src/index.ts:704](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L704)
+[src/index.ts:704](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L704)
 
 ___
 
@@ -178,7 +178,7 @@ An altered relay style connection with a new node type
 
 #### Defined in
 
-[src/index.ts:796](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L796)
+[src/index.ts:796](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L796)
 
 ___
 
@@ -216,7 +216,7 @@ For more info on using cursor based pagination algorithms like relay see:
 
 #### Defined in
 
-[src/index.ts:488](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L488)
+[src/index.ts:488](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L488)
 
 ___
 
@@ -250,7 +250,7 @@ Creates the relay paginate plugin, so that you can use relayPaginate
 
 #### Defined in
 
-[src/index.ts:936](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L936)
+[src/index.ts:936](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L936)
 
 ___
 
@@ -284,7 +284,7 @@ A [RelayResult](interfaces/RelayResult.md)
 
 #### Defined in
 
-[src/index.ts:764](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L764)
+[src/index.ts:764](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L764)
 
 ___
 
@@ -311,4 +311,4 @@ ___
 
 #### Defined in
 
-[src/index.ts:741](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b343b43/src/index.ts#L741)
+[src/index.ts:741](https://github.com/johnsonjo4531/mongoose-relay-paginate/blob/b9e2a7f/src/index.ts#L741)
