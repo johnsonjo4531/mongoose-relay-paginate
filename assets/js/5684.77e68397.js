@@ -1,0 +1,1 @@
+(self.webpackChunkmongoose_relay_paginate=self.webpackChunkmongoose_relay_paginate||[]).push([[5684],{9039:(e,a,s)=>{"use strict";s.d(a,{Z:()=>o});var n=s(1336);const o=n},5525:()=>{}}]);
